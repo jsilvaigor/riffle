@@ -1,8 +1,11 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -59,6 +62,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/items/{id}", s.auth(s.item))
 	mux.HandleFunc("GET /api/items/{id}/stream", s.auth(s.stream)) // also serves HEAD
 	mux.HandleFunc("POST /api/items/{id}/warm", s.auth(s.warm))
+	mux.HandleFunc("GET /api/items/{id}/poster.jpg", s.auth(s.poster))
 	mux.HandleFunc("GET /api/items/{id}/trickplay/manifest.json", s.auth(s.trickManifest))
 	mux.HandleFunc("GET /api/items/{id}/trickplay/{n}", s.auth(s.trickSheet))
 	mux.HandleFunc("GET /api/progress", s.auth(s.allProgress))
@@ -84,6 +88,46 @@ func (s *Server) auth(h http.HandlerFunc) http.HandlerFunc {
 		}
 		h(w, r)
 	}
+}
+
+// writeJSONCached serves a GET response with a weak ETag (304 when the client's copy
+// is current) and gzip when accepted. The library listing is ~1.4 MB for 2.6k items
+// and compresses about 8x.
+func writeJSONCached(w http.ResponseWriter, r *http.Request, v any) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	sum := sha256.Sum256(b)
+	etag := `W/"` + hex.EncodeToString(sum[:8]) + `"`
+	h := w.Header()
+	h.Set("ETag", etag)
+	h.Set("Vary", "Accept-Encoding")
+	h.Set("Cache-Control", "private, no-cache") // always revalidate; 304s are cheap
+	if inm := r.Header.Get("If-None-Match"); inm != "" && strings.Contains(inm, strings.TrimPrefix(etag, "W/")) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	h.Set("Content-Type", "application/json")
+	if len(b) < 1024 || !acceptsGzip(r) {
+		w.Write(b)
+		return
+	}
+	h.Set("Content-Encoding", "gzip")
+	gz, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
+	gz.Write(b)
+	gz.Close()
+}
+
+func acceptsGzip(r *http.Request) bool {
+	for _, part := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
+		enc, params, _ := strings.Cut(strings.TrimSpace(part), ";")
+		if strings.TrimSpace(enc) == "gzip" && strings.ReplaceAll(params, " ", "") != "q=0" {
+			return true
+		}
+	}
+	return false
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -121,7 +165,7 @@ func (s *Server) library(w http.ResponseWriter, r *http.Request) {
 	for i, rt := range s.cfg.Roots {
 		roots[i] = rt.Name
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"roots": roots, "items": s.lib.Snapshot()})
+	writeJSONCached(w, r, map[string]any{"roots": roots, "items": s.lib.Snapshot()})
 }
 
 func (s *Server) rescan(w http.ResponseWriter, r *http.Request) {
@@ -230,8 +274,12 @@ func (s *Server) trickSheet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) allProgress(w http.ResponseWriter, r *http.Request) {
 	s.progMu.Lock()
-	defer s.progMu.Unlock()
-	writeJSON(w, http.StatusOK, s.progress)
+	cp := make(map[string]Progress, len(s.progress))
+	for k, v := range s.progress {
+		cp[k] = v
+	}
+	s.progMu.Unlock()
+	writeJSONCached(w, r, cp)
 }
 
 func (s *Server) putProgress(w http.ResponseWriter, r *http.Request) {

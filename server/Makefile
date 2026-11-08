@@ -31,6 +31,8 @@ media: ## generate test videos in testdata/media
 		-c:v libx265 -preset ultrafast -crf 32 -tag:v hvc1 -x265-params log-level=error testdata/media/hevc.mp4 || true
 	ffmpeg -hide_banner -loglevel error -n -f lavfi -i testsrc2=duration=60:size=640x480:rate=25 \
 		-c:v wmv2 -b:v 1M testdata/media/wmv2.wmv || true
+	ffmpeg -hide_banner -loglevel error -n -f lavfi -i testsrc2=duration=4:size=1080x1430:rate=30 \
+		-c:v libx264 -g 250 testdata/media/short-portrait.mp4 || true
 
 dev: ## run the server natively against testdata/media (CPU decoding)
 	RIFFLE_MEDIA=Test=$(CURDIR)/testdata/media RIFFLE_DATA=$(CURDIR)/data RIFFLE_TOKEN=$(TOKEN) \

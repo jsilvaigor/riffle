@@ -47,5 +47,7 @@ the top priority. Two parts:
 - [x] Server: `-hwaccel cuda` verified on the RTX 3050 inside the container (driver
   615.78.08, ~0.5 s per 720p trickplay job); VAAPI on the UHD 630 works too
 - [x] Server: first scan queues trickplay per probed file and saves the index as it goes
+- [x] Server: poster endpoint (cropped trickplay tile), gzip + ETag on library/progress,
+  trickplay for short single-keyframe clips
 - [ ] Server: Bonjour advertisement, Unraid template XML
 - [ ] iOS app: project setup with MPVKit, library browser, player, custom scrub bar
