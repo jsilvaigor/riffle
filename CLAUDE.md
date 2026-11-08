@@ -38,8 +38,10 @@ with `git add -A`, then a branch switch removed those files from disk. To avoid 
 ## Server conventions
 
 - Standard library only unless there's a strong reason; ask before adding a dependency.
-- The admin dashboard (`server/admin/`, served at `/admin/`) is `html/template` fragments
-  driven by htmx 2.0.4, vendored and embedded with `go:embed`. No build step; keep it that way.
+- The admin dashboard (`server/admin/`, served at `/admin/` and `/admin/library`) is
+  `html/template` fragments (`admin/fragments*.html`) driven by htmx 2.0.4, with shared
+  `admin.css`/`admin.js`, all vendored and embedded with `go:embed`. No build step; keep it
+  that way. Restart the server to see edits: the files are compiled into the binary.
 - All config via `RIFFLE_*` env vars (`server/config.go`); document new ones in `server/README.md`.
 - Never transcode on the default path. Streaming must stay `http.ServeContent` on the
   original file so Range requests and sendfile keep working (the logging middleware's

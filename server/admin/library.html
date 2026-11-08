@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Library · Riffle Server admin</title>
+<link rel="stylesheet" href="/admin/assets/admin.css">
+<script src="/admin/assets/htmx.min.js"></script>
+<script src="/admin/assets/admin.js" defer></script>
+<script src="/admin/assets/library.js" defer></script>
+</head>
+<body>
+<header>
+  <h1>Riffle Server <span>admin</span></h1>
+  <nav><a href="/admin/">Overview</a><a href="/admin/library" aria-current="page">Library</a></nav>
+  <button id="token-btn" class="link" type="button">Change token</button>
+</header>
+
+<section id="login" hidden>
+  <form id="login-form">
+    <h2>Token</h2>
+    <p class="muted" id="login-msg">Paste the server's <code>RIFFLE_TOKEN</code>. It's kept in this browser only.</p>
+    <input id="token-input" type="password" autocomplete="current-password" spellcheck="false" required
+           aria-label="Riffle Server token">
+    <button class="primary" type="submit">Save token</button>
+  </form>
+</section>
+
+<main id="panels">
+  <!-- The filter form (with the folder list) loads first, then loads the results. -->
+  <div hx-get="/admin/f/libfilters" hx-trigger="refresh from:body once" hx-swap="outerHTML">
+    <p class="placeholder">Loading…</p>
+  </div>
+  <div id="results"></div>
+</main>
+
+<dialog id="item" aria-label="Video details"></dialog>
+<div id="toast" aria-live="polite"></div>
+</body>
+</html>
