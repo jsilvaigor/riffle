@@ -85,7 +85,9 @@ release: ## release a new version: make release [BUMP=minor]
 		echo "Error: release from main."; exit 1; \
 	fi
 	@git fetch origin --quiet 2>/dev/null || true
-	@if [ -n "$$(git status --porcelain)" ]; then \
+	@# Untracked files don't block a release: it only commits VERSION, and the image is
+	@# built from server/ through a whitelist .dockerignore.
+	@if [ -n "$$(git status --porcelain --untracked-files=no)" ]; then \
 		echo "Error: uncommitted changes. Commit and push first."; exit 1; \
 	fi
 	@if [ "$$(git rev-parse HEAD)" != "$$(git rev-parse origin/main)" ]; then \
