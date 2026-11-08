@@ -4,7 +4,7 @@ Personal iOS video player that streams from a home NAS, with scrubbing performan
 the top priority. Two parts:
 
 - **Riffle Server** (`server/`): companion that runs in Docker on the NAS
-- **Riffle for iOS** (`ios/`, not started): the player
+- **Riffle for iOS** (`ios/`, see `ios/README.md`): the player
 
 ## Requirements
 
@@ -56,4 +56,5 @@ the top priority. Two parts:
   `finishedAt`) decided server-side for the app's counters; dashboard filters and counts
 - [ ] Server: Bonjour advertisement, Unraid template XML
 - [x] Server: rotation and display size in item metadata, for player orientation
-- [ ] iOS app: project setup with MPVKit, library browser, player, custom scrub bar
+- [x] iOS app: Xcode project, connect screen, library browser, detail, search, settings
+- [ ] iOS app: MPVKit player, custom scrub bar with trickplay, track sheet, PiP
