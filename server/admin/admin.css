@@ -7,12 +7,18 @@
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 * { box-sizing: border-box; }
+/* display rules below (buttons are inline-flex) must not beat the hidden attribute. */
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--surface); color: var(--ink); font: 15px/1.45 var(--sans); }
 header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 14px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
   background: var(--surface); z-index: 2; }
-header h1 { font-size: 17px; margin: 0; font-weight: 600; }
-header h1 span { color: var(--ink-muted); font-weight: 400; }
+header h1 { font-size: 17px; margin: 0; font-weight: 400; }
+/* The lockup (design/assets/Logos) is the server web page's logo: 30 px tall keeps it
+   over its 96 px minimum width. */
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink-muted);
+  text-decoration: none; }
+.brand img { display: block; }
 main, #login { max-width: 1180px; margin: 0 auto; padding: 20px; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted);
   margin: 0 0 10px; font-weight: 600; }
@@ -46,15 +52,13 @@ button:disabled { opacity: .5; cursor: progress; }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th { text-align: left; color: var(--ink-muted); font-weight: 500; font-size: 13px; }
 th, td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-td.name { overflow-wrap: anywhere; }
+td.name { overflow-wrap: anywhere; min-width: 170px; }
 .scroll { overflow-x: auto; }
 .bars { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; align-items: center; }
 .bar { height: 6px; border-radius: 3px; background: var(--ink-muted); }
 .badge { font-size: 12px; border: 1px solid var(--ink-muted); border-radius: 4px; padding: 0 5px;
   color: var(--ink-muted); white-space: nowrap; }
-.ok-text::before { content: "✓ "; }
 .err-text { color: var(--alert); }
-.err-text::before { content: "✕ "; }
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 5;
   width: min(560px, calc(100% - 32px)); }
 .toast { background: var(--surface-raised); border: 1px solid var(--ink-muted); border-radius: 10px;
@@ -130,3 +134,46 @@ dialog#item::backdrop { background: rgba(0,0,0,.7); }
 .sheets img { width: 100%; display: block; border-radius: 6px; margin-top: 8px; background: var(--stage); }
 summary { cursor: pointer; color: var(--ink-muted); }
 .tracks { margin: 0; padding-left: 18px; }
+
+/* Icons: stand-ins for the design's SF Symbols (admin/icons.svg), sized to the text. */
+.icon { width: 1.2em; height: 1.2em; flex: none; vertical-align: -0.25em; }
+button, header nav a, h2, .toast, .err-text, .ok-text, .alert, summary { gap: 6px; }
+button { display: inline-flex; align-items: center; justify-content: center; }
+/* Video tiles are buttons too: keep their column layout full width. */
+button.tile { display: flex; align-items: stretch; justify-content: flex-start; }
+button .icon { width: 17px; height: 17px; }
+button.small .icon { width: 15px; height: 15px; }
+button.icon-only { padding: 6px; min-width: 36px; min-height: 36px; }
+button.icon-only .icon { width: 20px; height: 20px; }
+h2 { display: flex; align-items: center; }
+h2 .icon { width: 15px; height: 15px; }
+header nav a { display: inline-flex; align-items: center; }
+header nav a .icon { width: 17px; height: 17px; }
+header nav a[aria-current="page"] .icon { color: var(--citron); }
+.toast { display: flex; align-items: flex-start; }
+.toast .icon { margin-top: 2px; }
+.ok-text, .err-text, .alert { display: inline-flex; align-items: center; }
+.err-text.mono { display: flex; align-items: flex-start; }
+.err-text.mono .icon { margin-top: 1px; }
+dd .alert { display: inline; }
+dd .alert .icon { margin-right: 4px; }
+summary { display: flex; align-items: center; }
+.tile .sub .icon { width: 14px; height: 14px; vertical-align: -2px; margin-right: 2px; }
+.thumb .note { display: grid; justify-items: center; gap: 6px; }
+.thumb .note .icon { width: 26px; height: 26px; }
+
+/* Search field with its glyph inside */
+.filters .search { position: relative; flex: 1 1 220px; display: flex; }
+.filters .search .icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  width: 17px; height: 17px; color: var(--ink-muted); pointer-events: none; }
+.filters .search input { flex: 1; padding-left: 34px; min-width: 0; }
+
+/* Empty states: one illustration from design/assets/Illustrations, a title and a message. */
+.empty { text-align: center; padding: 40px 16px; }
+.empty img { display: block; width: 160px; max-width: 100%; height: auto; margin: 0 auto; }
+.empty h3 { font-size: 20px; font-weight: 600; margin: 16px 0 4px; }
+.empty p { color: var(--ink-muted); margin: 0 auto 14px; max-width: 42ch; }
+.empty .big-icon { display: inline-grid; place-items: center; }
+.empty .big-icon .icon { width: 40px; height: 40px; }
+#offline { max-width: 1180px; margin: 0 auto; }
+#login .empty h3 { margin-bottom: 0; }

@@ -133,7 +133,9 @@ Thumbnail `k` shows time `k * interval`. It's in sheet `k / (columns*rows)`, at 
 ### Admin dashboard
 
 Open `http://<server>:8770/admin/` in a browser. It asks for the token once and keeps it in
-that browser's localStorage ("Change token" in the header forgets it). The page is built with
+that browser's localStorage ("Change token" in the header forgets it). It uses the Riffle
+design system: the lockup, the app icon as favicon (also served at `/favicon.ico`),
+stand-ins for the app's SF Symbols, and the empty-state illustrations. The page is built with
 [htmx](https://htmx.org) 2.0.4, vendored in `admin/` and embedded in the binary, so it works
 without internet access.
 

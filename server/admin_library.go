@@ -143,7 +143,8 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 	next := offset + len(page)
 	return map[string]any{
 		"Cards": cards, "Total": total, "First": offset == 0,
-		"Next": next, "More": next < total, "Remaining": total - next,
+		"Filtered": q != "" || folder != "" || state != "",
+		"Next":     next, "More": next < total, "Remaining": total - next,
 	}
 }
 

@@ -2,7 +2,7 @@
 <form id="filters" class="filters" role="search"
       hx-get="/admin/f/browse" hx-target="#results" hx-sync="this:replace"
       hx-trigger="load, change, input delay:300ms">
-  <input type="search" name="q" placeholder="Search names and folders" aria-label="Search" autocomplete="off">
+  <label class="search">{{icon "search"}}<input type="search" name="q" placeholder="Search names and folders" aria-label="Search" autocomplete="off"></label>
   <select name="folder" aria-label="Folder">
     <option value="">All folders</option>
     {{range .Folders}}<option value="{{.Value}}">{{.Label}} ({{.Count}})</option>{{end}}
@@ -29,7 +29,19 @@
 {{if .First}}
   <p class="count">{{.Total}} video{{if ne .Total 1}}s{{end}}</p>
   {{if .Cards}}<ul class="grid">{{template "cards" .}}</ul>
-  {{else}}<p class="placeholder">No videos match.</p>{{end}}
+  {{else if .Filtered}}
+    <div class="empty">
+      <img src="/admin/assets/empty-library.svg" alt="" width="160" height="107">
+      <h3>No videos match</h3>
+      <p>Try another search, folder or filter.</p>
+    </div>
+  {{else}}
+    <div class="empty">
+      <img src="/admin/assets/empty-library.svg" alt="" width="160" height="107">
+      <h3>No videos yet</h3>
+      <p>Add folders to RIFFLE_MEDIA on the server, then rescan.</p>
+    </div>
+  {{end}}
 {{else}}
   {{template "cards" .}}
 {{end}}
@@ -42,13 +54,13 @@
           aria-label="{{.Name}}">
     <div class="thumb">
       <img data-src="/api/items/{{.ID}}/poster.jpg" alt="" loading="lazy" class="missing">
-      <span class="note">{{if .ProbeErr}}Can't read this file{{else if eq .Trickplay "failed"}}No preview{{else if eq .Trickplay "ready"}}Loading…{{else}}Preview not ready{{end}}</span>
+      <span class="note">{{if .ProbeErr}}{{icon "alert"}}Can't read this file{{else if eq .Trickplay "failed"}}{{icon "film"}}No preview{{else if eq .Trickplay "ready"}}{{icon "film"}}Loading…{{else}}{{icon "film"}}Preview not ready{{end}}</span>
       {{if .Duration}}<span class="dur">{{timecode .Duration}}</span>{{end}}
       {{if .Watched}}<span class="watched" style="width: {{.Watched}}%"></span>{{end}}
     </div>
     <div class="meta">
       <span class="title">{{.Name}}</span>
-      <span class="sub">{{.Folder}}</span>
+      <span class="sub">{{icon "folder"}} {{.Folder}}</span>
       <span class="sub">{{if .Res}}{{.Res}} · {{.Codec}} · {{end}}{{bytes .Size}}</span>
     </div>
   </button>
@@ -57,7 +69,7 @@
 {{if .More}}
 <li class="more">
   <button hx-get="/admin/f/browse" hx-include="#filters" hx-vals='{"offset": {{.Next}}}'
-          hx-target="closest li" hx-swap="outerHTML">Show more ({{.Remaining}} left)</button>
+          hx-target="closest li" hx-swap="outerHTML">{{icon "chevron"}} Show more ({{.Remaining}} left)</button>
 </li>
 {{end}}
 {{end}}
@@ -69,7 +81,7 @@
     <h2>{{$it.Name}}</h2>
     <div class="muted mono">{{$it.Root}}/{{$it.Path}}</div>
   </div>
-  <button class="link" type="button" onclick="this.closest('dialog').close()" aria-label="Close">Close</button>
+  <button class="link icon-only" type="button" onclick="this.closest('dialog').close()" aria-label="Close">{{icon "close"}}</button>
 </div>
 <div class="item-body">
   <div>
@@ -84,13 +96,23 @@
           scrub previews the app shows, {{.Count}} frames, one every {{.Interval}} s.</p>
       </div>
       <details class="sheets" style="margin-top:16px">
-        <summary>Thumbnail sheets ({{.Sheets}})</summary>
+        <summary>{{icon "film"}} Thumbnail sheets ({{.Sheets}})</summary>
         {{range $.Sheets}}<img data-src="/api/items/{{$it.ID}}/trickplay/{{.}}.jpg" alt="Sheet {{.}}" loading="lazy">{{end}}
       </details>
     {{else}}
-      <div class="thumb" style="border-radius:8px">
-        <span class="note">{{if $it.ProbeErr}}Can't read this file.{{else if eq $it.Trickplay "failed"}}Thumbnails failed for this video.{{else}}Previews aren't ready yet. They'll show here once this video's thumbnails are made.{{end}}</span>
-      </div>
+      {{if $it.ProbeErr}}
+        <div class="empty"><span class="big-icon alert">{{icon "alert"}}</span><h3>Can't read this file</h3>
+          <p>ffprobe couldn't read its metadata. The error is below.</p></div>
+      {{else if eq $it.Trickplay "failed"}}
+        <div class="empty"><span class="big-icon alert">{{icon "alert"}}</span><h3>No scrub previews</h3>
+          <p>Making thumbnails failed. The error is below; Rebuild thumbnails tries again.</p></div>
+      {{else}}
+        <div class="empty">
+          <img src="/admin/assets/previews-generating.svg" alt="" width="160" height="107">
+          <h3>Making scrub previews</h3>
+          <p>They'll show here once this video's thumbnails are made.</p>
+        </div>
+      {{end}}
     {{end}}
   </div>
 
@@ -111,7 +133,7 @@
         {{end}}
       {{end}}
       <dt>Thumbnails</dt>
-      <dd>{{if eq $it.Trickplay "failed"}}<span class="alert">Failed</span>{{else if eq $it.Trickplay "none"}}pending{{else}}{{$it.Trickplay}}{{end}}</dd>
+      <dd>{{if eq $it.Trickplay "failed"}}<span class="alert">{{icon "alert"}} Failed</span>{{else if eq $it.Trickplay "none"}}pending{{else}}{{$it.Trickplay}}{{end}}</dd>
       {{with .Progress}}<dt>Watched to</dt><dd>{{timecode .Position}} <span class="muted">{{ago .UpdatedAt}}</span></dd>{{end}}
     </dl>
     {{with $it.Probe}}
@@ -120,11 +142,11 @@
       {{if .Subtitles}}<h2 style="margin-top:16px">Subtitles</h2>
         <ul class="tracks">{{range .Subtitles}}<li>{{.Codec}}{{with .Language}}, {{.}}{{end}}{{with .Title}} <span class="muted">{{.}}</span>{{end}}{{if .Forced}} <span class="badge">forced</span>{{end}}</li>{{end}}</ul>{{end}}
     {{end}}
-    {{with $it.ProbeErr}}<p class="err-text mono">{{.}}</p>{{end}}
-    {{with $it.TrickErr}}<p class="err-text mono">{{.}}</p>{{end}}
+    {{with $it.ProbeErr}}<p class="err-text mono">{{icon "alert"}} {{.}}</p>{{end}}
+    {{with $it.TrickErr}}<p class="err-text mono">{{icon "alert"}} {{.}}</p>{{end}}
     <div class="actions">
-      <button hx-post="/admin/a/items/{{$it.ID}}/thumbnails" hx-target="#toast" hx-disabled-elt="this">Rebuild thumbnails</button>
-      <button hx-post="/admin/a/items/{{$it.ID}}/reprobe" hx-target="#toast" hx-disabled-elt="this">Re-probe</button>
+      <button hx-post="/admin/a/items/{{$it.ID}}/thumbnails" hx-target="#toast" hx-disabled-elt="this">{{icon "film"}} Rebuild thumbnails</button>
+      <button hx-post="/admin/a/items/{{$it.ID}}/reprobe" hx-target="#toast" hx-disabled-elt="this">{{icon "search"}} Re-probe</button>
     </div>
   </div>
 </div>

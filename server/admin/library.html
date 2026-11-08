@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Library · Riffle Server admin</title>
+<meta name="theme-color" content="#111113">
+<link rel="icon" href="/admin/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/admin/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/admin/assets/apple-touch-icon.png">
 <link rel="stylesheet" href="/admin/assets/admin.css">
 <script src="/admin/assets/htmx.min.js"></script>
 <script src="/admin/assets/admin.js" defer></script>
@@ -12,18 +16,28 @@
 </head>
 <body>
 <header>
-  <h1>Riffle Server <span>admin</span></h1>
-  <nav><a href="/admin/">Overview</a><a href="/admin/library" aria-current="page">Library</a></nav>
-  <button id="token-btn" class="link" type="button">Change token</button>
+  <h1><a class="brand" href="/admin/"><img src="/admin/assets/riffle-lockup.svg" alt="Riffle" width="98" height="30"><span>Server admin</span></a></h1>
+  <nav><a href="/admin/"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#gauge"/></svg> Overview</a><a href="/admin/library" aria-current="page"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#stack"/></svg> Library</a></nav>
+  <button id="token-btn" class="link" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#key"/></svg> Change token</button>
 </header>
+
+<section id="offline" class="empty" hidden>
+  <img src="/admin/assets/offline.svg" alt="" width="160" height="107">
+  <h3>Can't reach Riffle Server</h3>
+  <p>Check that the container is running, then try again.</p>
+  <button type="button" onclick="location.reload()"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#replay"/></svg> Try again</button>
+</section>
 
 <section id="login" hidden>
   <form id="login-form">
-    <h2>Token</h2>
+    <div class="empty" style="padding:8px 0 16px">
+      <img src="/admin/assets/empty-server.svg" alt="" width="160" height="107">
+      <h3>Connect to Riffle Server</h3>
+    </div>
     <p class="muted" id="login-msg">Paste the server's <code>RIFFLE_TOKEN</code>. It's kept in this browser only.</p>
     <input id="token-input" type="password" autocomplete="current-password" spellcheck="false" required
            aria-label="Riffle Server token">
-    <button class="primary" type="submit">Save token</button>
+    <button class="primary" type="submit">Connect</button>
   </form>
 </section>
 

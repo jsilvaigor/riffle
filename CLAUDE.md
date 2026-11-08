@@ -42,6 +42,10 @@ with `git add -A`, then a branch switch removed those files from disk. To avoid 
   `html/template` fragments (`admin/fragments*.html`) driven by htmx 2.0.4, with shared
   `admin.css`/`admin.js`, all vendored and embedded with `go:embed`. No build step; keep it
   that way. Restart the server to see edits: the files are compiled into the binary.
+  It follows `design/`: the lockup, illustrations and favicons in `server/admin/` are
+  copies from `design/assets/` (go:embed can't reach outside `server/`), so update them
+  together; `admin/icons.svg` holds outlined stand-ins for the SF Symbols in
+  `design/README.md`, used through the `icon` template helper.
 - All config via `RIFFLE_*` env vars (`server/config.go`); document new ones in `server/README.md`.
 - Never transcode on the default path. Streaming must stay `http.ServeContent` on the
   original file so Range requests and sendfile keep working (the logging middleware's
