@@ -26,8 +26,9 @@ performance is the top priority.** Read `docs/architecture.md` for decisions and
 ## Checks
 
 ```sh
-cd server && gofmt -l . && go vet ./... && go build -race -o /tmp/riffle .
+cd server && make test   # gofmt, vet, race build, go test -race
 ```
 
-For a manual run, generate test media with ffmpeg (`testsrc`, a few codecs: h264 mkv,
-hevc mp4, wmv2 wmv) and run with `RIFFLE_HWACCEL=none`.
+For a manual run: `make media` then `make dev` (CPU decoding, token `dev`), and
+`make diag` to hit `/api/diagnostics`. Releases go through `make release` (see
+`server/README.md`); the version comes from `server/VERSION` via `-ldflags`.

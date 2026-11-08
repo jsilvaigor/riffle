@@ -1,0 +1,21 @@
+# Local container for development: `make media` once, then `make build run`.
+# Production runs on Unraid from the registry image (see README.md).
+services:
+  riffle:
+    build:
+      context: .
+      args:
+        VERSION: dev
+    image: riffle-server:dev
+    ports:
+      - "8770:8770"
+    environment:
+      RIFFLE_MEDIA: Test=/media/test
+      RIFFLE_TOKEN: ${RIFFLE_TOKEN:-dev}
+      # No GPU in Docker Desktop; `make diag` still runs the cuda/vaapi tests and
+      # reports them as failed.
+      RIFFLE_HWACCEL: ${RIFFLE_HWACCEL:-none}
+      RIFFLE_SCAN_MINUTES: "0"
+    volumes:
+      - ./testdata/media:/media/test:ro
+      - ./data:/data

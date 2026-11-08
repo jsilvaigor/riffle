@@ -33,6 +33,9 @@ type Manifest struct {
 const (
 	sheetCols = 10
 	sheetRows = 10
+
+	vaapiDevice = "/dev/dri/renderD128"
+	recentJobs  = 20 // finished jobs kept for /api/diagnostics
 )
 
 // trickQueue is a FIFO with "jump to front" for items a viewer is waiting on.
@@ -92,6 +95,9 @@ type Trickplay struct {
 	lib      *Library
 	q        *trickQueue
 	hwBroken atomic.Bool
+
+	jobsMu sync.Mutex
+	jobs   []TrickJob // newest first
 }
 
 func NewTrickplay(cfg Config, lib *Library) *Trickplay {
@@ -122,21 +128,63 @@ func (t *Trickplay) worker(ctx context.Context) {
 			return
 		}
 		start := time.Now()
-		if err := t.generate(ctx, id); err != nil {
-			if ctx.Err() != nil {
-				return
-			}
+		hw, err := t.generate(ctx, id)
+		if err != nil && ctx.Err() != nil {
+			return
+		}
+		job := TrickJob{ID: id, HWAccel: hw, Fallback: hw != t.cfg.HWAccel,
+			Millis: time.Since(start).Milliseconds(), At: time.Now().UTC()}
+		if err != nil {
 			log.Printf("trickplay %s: %v", id, err)
+			job.Error = err.Error()
 			t.lib.SetTrickplay(id, TrickFailed)
 		} else {
-			log.Printf("trickplay %s: done in %s", id, time.Since(start).Round(time.Millisecond))
+			log.Printf("trickplay %s: done in %s (%s)", id, time.Since(start).Round(time.Millisecond), hw)
 			t.lib.SetTrickplay(id, TrickReady)
 		}
+		t.lib.mu.RLock()
+		if it := t.lib.items[id]; it != nil {
+			job.Name = it.Name
+		}
+		t.lib.mu.RUnlock()
+		t.record(job)
 		t.lib.save()
 	}
 }
 
-func (t *Trickplay) generate(ctx context.Context, id string) error {
+func (t *Trickplay) record(j TrickJob) {
+	t.jobsMu.Lock()
+	defer t.jobsMu.Unlock()
+	t.jobs = append([]TrickJob{j}, t.jobs...)
+	if len(t.jobs) > recentJobs {
+		t.jobs = t.jobs[:recentJobs]
+	}
+}
+
+// Status summarizes the queue and recent jobs for /api/diagnostics.
+func (t *Trickplay) Status() map[string]any {
+	effective := t.cfg.HWAccel
+	if t.hwBroken.Load() {
+		effective = "none"
+	}
+	counts := map[string]int{}
+	for _, it := range t.lib.Snapshot() {
+		counts[it.Trickplay]++
+	}
+	t.q.mu.Lock()
+	queued := len(t.q.list)
+	t.q.mu.Unlock()
+	t.jobsMu.Lock()
+	jobs := append([]TrickJob{}, t.jobs...)
+	t.jobsMu.Unlock()
+	return map[string]any{
+		"effectiveHWAccel": effective, "hwDisabled": t.hwBroken.Load(),
+		"queued": queued, "items": counts, "recentJobs": jobs,
+	}
+}
+
+// generate renders the sheets and returns the decoder that produced them.
+func (t *Trickplay) generate(ctx context.Context, id string) (string, error) {
 	t.lib.mu.RLock()
 	it, ok := t.lib.items[id]
 	var abs string
@@ -146,10 +194,10 @@ func (t *Trickplay) generate(ctx context.Context, id string) error {
 	}
 	t.lib.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("item no longer in library")
+		return "", fmt.Errorf("item no longer in library")
 	}
 	if probe == nil || probe.Video == nil || probe.Duration <= 0 {
-		return fmt.Errorf("no video stream or unknown duration")
+		return "", fmt.Errorf("no video stream or unknown duration")
 	}
 
 	interval := t.cfg.Interval
@@ -163,7 +211,7 @@ func (t *Trickplay) generate(ctx context.Context, id string) error {
 	tmp := dir + ".tmp"
 	os.RemoveAll(tmp)
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
-		return err
+		return "", err
 	}
 	defer os.RemoveAll(tmp)
 
@@ -182,24 +230,25 @@ func (t *Trickplay) generate(ctx context.Context, id string) error {
 		}
 		os.RemoveAll(tmp)
 		os.MkdirAll(tmp, 0o755)
-		err = t.runFFmpeg(ctx, "none", abs, probe.Video.Index, interval, tmp)
+		hw = "none"
+		err = t.runFFmpeg(ctx, hw, abs, probe.Video.Index, interval, tmp)
 	}
 	if err != nil {
-		return err
+		return hw, err
 	}
 
 	sheets, _ := filepath.Glob(filepath.Join(tmp, "*.jpg"))
 	if len(sheets) == 0 {
-		return fmt.Errorf("ffmpeg produced no sheets")
+		return hw, fmt.Errorf("ffmpeg produced no sheets")
 	}
 	f, err := os.Open(sheets[0])
 	if err != nil {
-		return err
+		return hw, err
 	}
 	cfgImg, err := jpeg.DecodeConfig(f)
 	f.Close()
 	if err != nil {
-		return fmt.Errorf("reading sheet: %w", err)
+		return hw, fmt.Errorf("reading sheet: %w", err)
 	}
 	if count > len(sheets)*perSheet {
 		count = len(sheets) * perSheet
@@ -210,10 +259,10 @@ func (t *Trickplay) generate(ctx context.Context, id string) error {
 	}
 	b, _ := json.MarshalIndent(m, "", "  ")
 	if err := os.WriteFile(filepath.Join(tmp, "manifest.json"), b, 0o644); err != nil {
-		return err
+		return hw, err
 	}
 	os.RemoveAll(dir)
-	return os.Rename(tmp, dir)
+	return hw, os.Rename(tmp, dir)
 }
 
 func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, interval float64, outDir string) error {
@@ -224,7 +273,7 @@ func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, i
 	case "cuda":
 		args = append(args, "-hwaccel", "cuda")
 	case "vaapi":
-		args = append(args, "-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128")
+		args = append(args, "-hwaccel", "vaapi", "-hwaccel_device", vaapiDevice)
 	}
 	// -skip_frame nokey decodes keyframes only: 10-50x less work than a full decode,
 	// at the cost of thumbnails snapping to the nearest keyframe (usually <2-5 s away).
@@ -243,11 +292,7 @@ func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, i
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if len(msg) > 500 {
-			msg = msg[len(msg)-500:]
-		}
-		return fmt.Errorf("%v: %s", err, msg)
+		return fmt.Errorf("%v: %s", err, tail(stderr.String(), 500))
 	}
 	return nil
 }

@@ -42,6 +42,9 @@ the top priority. Two parts:
 
 - [x] Server: scanning, ffprobe metadata, range streaming, trickplay queue (priority for
   items being watched), progress, token auth, Dockerfile, Unraid instructions
+- [x] Server: Makefile, docker-compose for local runs, versioned releases to
+  `registry.isilva.dev/riffle-server`, basic Go tests, `/api/diagnostics`
 - [ ] Server: verify `-hwaccel cuda` on the real RTX 3050 inside the container
-- [ ] Server: Bonjour advertisement, Go tests, Unraid template XML
+  (deploy a release, then check `/api/diagnostics`)
+- [ ] Server: Bonjour advertisement, Unraid template XML
 - [ ] iOS app: project setup with MPVKit, library browser, player, custom scrub bar

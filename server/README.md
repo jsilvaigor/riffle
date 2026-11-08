@@ -35,12 +35,13 @@ switches to the CPU for the rest of the session.
 
 ## Running on Unraid
 
-1. Build the image on the server (Unraid terminal):
+1. Pull the image published by `make release` (Unraid terminal, once `docker login
+   registry.isilva.dev` is done):
    ```sh
-   git clone https://github.com/jsilvaigor/riffle.git /mnt/user/appdata/riffle-src
-   cd /mnt/user/appdata/riffle-src/server
-   docker build -t riffle-server .
+   docker pull registry.isilva.dev/riffle-server:latest
    ```
+   To build on the server instead, clone the repo and run `docker build -t riffle-server .`
+   in `server/`.
 2. Make sure the **Nvidia Driver** plugin is installed (needed for `--runtime=nvidia`).
 3. Run it:
    ```sh
@@ -52,13 +53,16 @@ switches to the CPU for the rest of the session.
      -v /mnt/user/Media/Movies:/media/movies:ro \
      -v /mnt/user/Media/TV:/media/tv:ro \
      -v /mnt/cache/appdata/riffle:/data \
-     riffle-server
+     registry.isilva.dev/riffle-server:latest
    ```
    Adjust the media paths to your shares. Mount media **read-only**. Point `/data` at
    the SSD pool (`/mnt/cache/...` or your "speed" share) so thumbnails and the index
    stay fast even while array disks are spun down.
 4. Check the logs with `docker logs -f riffle-server`. If you see
    `cuda device unavailable, using CPU`, the NVIDIA runtime isn't reaching the container.
+5. Check hardware decoding from any machine: `make diag URL=http://tower:8770 TOKEN=change-me`
+   (or `curl -H "Authorization: Bearer change-me" http://tower:8770/api/diagnostics`).
+   See [Diagnostics](#diagnostics) for how to read it.
 
 To use the Intel iGPU instead: set `RIFFLE_HWACCEL=vaapi`, add `--device /dev/dri`, and
 drop the `--runtime=nvidia` flags.
@@ -77,7 +81,8 @@ All endpoints except `/api/health` require the token, sent as `Authorization: Be
 
 | Method & path | Description |
 |---|---|
-| `GET /api/health` | Server name, version, whether auth is required |
+| `GET /api/health` | Server name, version, commit, whether auth is required |
+| `GET /api/diagnostics` | Build, ffmpeg/GPU environment and live decode tests (takes 1-3 s) |
 | `GET /api/library` | `{roots: [...], items: [...]}` with metadata and trickplay state |
 | `POST /api/library/rescan` | Trigger a rescan (202) |
 | `GET /api/items/{id}` | One item |
@@ -99,10 +104,42 @@ Thumbnail `k` shows time `k * interval`. It's in sheet `k / (columns*rows)`, at 
 `k % (columns*rows)` counting left to right, top to bottom. A 2-hour movie is about
 15 sheets, roughly 5-7 MB in total, so the app can prefetch all of them when a video opens.
 
+### Diagnostics
+
+`GET /api/diagnostics` answers "is the GPU actually doing the work?" without shell access
+to the container. It generates a 20 s 720p h264 clip in `RIFFLE_DATA/diagnostics/` (once)
+and decodes it several ways:
+
+| Test | Passes when |
+|---|---|
+| `none` | ffmpeg can decode on the CPU |
+| `cuda` | NVDEC decodes with frames kept on the GPU, so a silent CPU fallback counts as a failure |
+| `vaapi` | Same on the Intel iGPU; skipped without `--device /dev/dri` |
+| `trickplay:<hwaccel>` | The real trickplay command works with the configured `RIFFLE_HWACCEL` |
+
+It also reports `nvidia-smi` output (only present with `--runtime=nvidia`), the `/dev/dri`
+nodes, `ffmpeg -hwaccels`, and under `trickplay` the decoder in use (`effectiveHWAccel`,
+`hwDisabled` once a device failure switched it to CPU) and the last 20 jobs with the
+decoder and time each took. On the RTX 3050 expect `cuda` and `trickplay:cuda` to pass
+and recent jobs to show `"hwaccel": "cuda", "fallback": false`.
+
 ## Development
 
+Everything runs through the `Makefile` in `server/` (`make help` lists the targets):
+
 ```sh
-cd server
-go build -o riffle-server .
-RIFFLE_MEDIA=/path/to/videos RIFFLE_DATA=/tmp/riffle-data RIFFLE_HWACCEL=none ./riffle-server
+make test          # gofmt, vet, race build, unit tests
+make media         # test videos in testdata/media (h264 mkv, hevc mp4, wmv2 wmv)
+make dev           # run natively on CPU against testdata/media, token "dev"
+make build run     # same in Docker (docker-compose.yml), then `make logs` / `make stop`
+make diag          # call /api/diagnostics on localhost (URL= and TOKEN= to point elsewhere)
 ```
+
+### Releasing
+
+`make release` (or `make release BUMP=minor|major`) needs a clean `main` that matches
+`origin/main`. It runs the tests, bumps `VERSION`, commits and tags `server-vX.Y.Z`,
+builds a `linux/amd64` image with the version and commit baked in (shown by `/api/health`),
+and only after a successful build pushes the commit, the tag, and
+`registry.isilva.dev/riffle-server:X.Y.Z` and `:latest`. Override the registry with
+`IMAGE_NAME=...`.
