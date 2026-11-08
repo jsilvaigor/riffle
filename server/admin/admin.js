@@ -12,7 +12,9 @@ function toast(msg, ok) {
   $("toast").innerHTML = "";
   const div = document.createElement("div");
   div.className = "toast" + (ok ? "" : " err");
-  div.textContent = msg;
+  if (!ok) div.insertAdjacentHTML("beforeend",
+    '<svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#alert"/></svg>');
+  div.append(msg);
   $("toast").appendChild(div);
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { $("toast").innerHTML = ""; }, 8000);
@@ -72,4 +74,7 @@ fetch("/api/health").then((r) => r.json()).then((h) => {
   $("token-btn").hidden = !authRequired;
   if (authRequired && !store.get()) showLogin();
   else showPanels();
-}).catch(() => toast("Can't reach Riffle Server. Check that it's running.", false));
+}).catch(() => {
+  $("panels").hidden = true;
+  $("offline").hidden = false;
+});

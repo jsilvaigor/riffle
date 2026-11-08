@@ -1,22 +1,22 @@
-{{define "toast"}}<div class="toast{{if not .OK}} err{{end}}" role="status">{{.Msg}}</div>{{end}}
+{{define "toast"}}<div class="toast{{if not .OK}} err{{end}}" role="status">{{if .OK}}{{icon "check"}}{{else}}{{icon "alert"}}{{end}} {{.Msg}}</div>{{end}}
 
 {{define "overview"}}
 <div class="cards">
   <article class="card">
-    <h2>Server</h2>
+    <h2>{{icon "server"}} Server</h2>
     <dl>
       <dt>Version</dt><dd>{{.Version}}{{with .Commit}} <span class="muted mono">{{.}}</span>{{end}}</dd>
       <dt>Uptime</dt><dd>{{dur .Uptime}}</dd>
       <dt>Decoder</dt>
-      <dd>{{.Trick.effectiveHWAccel}}{{if .Trick.hwDisabled}} <span class="alert">({{.Config.HWAccel}} failed, using CPU)</span>{{end}}</dd>
+      <dd>{{.Trick.effectiveHWAccel}}{{if .Trick.hwDisabled}} <span class="alert">{{icon "alert"}} ({{.Config.HWAccel}} failed, using CPU)</span>{{end}}</dd>
       <dt>Thumbnails</dt><dd>every {{.Config.Interval}} s, {{.Config.TileWidth}} px</dd>
       <dt>Auth</dt>
-      <dd>{{if .AuthRequired}}Token required{{else}}<span class="alert">Open: RIFFLE_TOKEN is empty</span>{{end}}</dd>
+      <dd>{{if .AuthRequired}}Token required{{else}}<span class="alert">{{icon "alert"}} Open: RIFFLE_TOKEN is empty</span>{{end}}</dd>
     </dl>
   </article>
 
   <article class="card">
-    <h2>Library</h2>
+    <h2>{{icon "stack"}} Library</h2>
     <p class="big">{{.Items}} <span>videos</span></p>
     <dl>
       <dt>Size</dt><dd>{{bytes .Size}}</dd>
@@ -30,7 +30,7 @@
   </article>
 
   <article class="card">
-    <h2>Scan</h2>
+    <h2>{{icon "search"}} Scan</h2>
     {{with .Scan}}
       {{if .Scanning}}
         <p class="big">{{.Probed}} <span>of {{.ToProbe}} probed</span></p>
@@ -42,34 +42,34 @@
       {{end}}
     {{end}}
     <div class="actions">
-      <button hx-post="/admin/a/rescan" hx-target="#toast" hx-disabled-elt="this">Rescan</button>
+      <button hx-post="/admin/a/rescan" hx-target="#toast" hx-disabled-elt="this">{{icon "replay"}} Rescan</button>
       <button hx-post="/admin/a/reprobe" hx-target="#toast" hx-disabled-elt="this"
-        hx-confirm="Probe every file again? It reads every file's header, so spun-down disks wake up. Thumbnails are kept.">Re-probe all</button>
+        hx-confirm="Probe every file again? It reads every file's header, so spun-down disks wake up. Thumbnails are kept.">{{icon "search"}} Re-probe all</button>
     </div>
   </article>
 
   <article class="card">
-    <h2>Thumbnails</h2>
+    <h2>{{icon "film"}} Thumbnails</h2>
     {{$ready := index .Tricks "ready"}}
     <p class="big">{{pct $ready .WithVideo}}% <span>{{$ready}} of {{.WithVideo}} ready</span></p>
     <progress value="{{$ready}}" max="{{.WithVideo}}"></progress>
     <dl>
       <dt>Queued</dt><dd>{{.Trick.queued}}{{if .Trick.paused}} <span class="badge">paused</span>{{end}}</dd>
-      <dt>Failed</dt><dd>{{with index .Tricks "failed"}}<span class="alert">{{.}}</span>{{else}}0{{end}}</dd>
+      <dt>Failed</dt><dd>{{with index .Tricks "failed"}}<span class="alert">{{icon "alert"}} {{.}}</span>{{else}}0{{end}}</dd>
     </dl>
     <div class="actions">
       {{if .Trick.paused}}
-        <button hx-post="/admin/a/resume" hx-target="#toast" hx-disabled-elt="this">Resume</button>
+        <button hx-post="/admin/a/resume" hx-target="#toast" hx-disabled-elt="this">{{icon "play"}} Resume</button>
       {{else}}
-        <button hx-post="/admin/a/pause" hx-target="#toast" hx-disabled-elt="this">Pause</button>
+        <button hx-post="/admin/a/pause" hx-target="#toast" hx-disabled-elt="this">{{icon "pause"}} Pause</button>
       {{end}}
       {{if index .Tricks "failed"}}
-        <button hx-post="/admin/a/retry-failed" hx-target="#toast" hx-disabled-elt="this">Retry failed</button>
+        <button hx-post="/admin/a/retry-failed" hx-target="#toast" hx-disabled-elt="this">{{icon "replay"}} Retry failed</button>
       {{end}}
       <button hx-post="/admin/a/clean-cache" hx-target="#toast" hx-disabled-elt="this"
-        hx-confirm="Remove leftover files: thumbnails of deleted videos, unfinished jobs, cached posters and the test clip? Thumbnails of library videos are kept.">Clean cache</button>
+        hx-confirm="Remove leftover files: thumbnails of deleted videos, unfinished jobs, cached posters and the test clip? Thumbnails of library videos are kept.">{{icon "trash"}} Clean cache</button>
       <button class="danger" hx-post="/admin/a/regenerate" hx-target="#toast" hx-disabled-elt="this"
-        hx-confirm="Delete every thumbnail and rebuild them all? Scrub previews are missing until each video is redone.">Rebuild all</button>
+        hx-confirm="Delete every thumbnail and rebuild them all? Scrub previews are missing until each video is redone.">{{icon "film"}} Rebuild all</button>
     </div>
   </article>
 </div>
@@ -84,7 +84,7 @@
   {{range .recentJobs}}
     <tr>
       <td class="name">{{if .Name}}{{.Name}}{{else}}<span class="mono">{{.ID}}</span>{{end}}
-        {{with .Error}}<div class="err-text mono">{{.}}</div>{{end}}</td>
+        {{with .Error}}<div class="err-text mono">{{icon "alert"}} {{.}}</div>{{end}}</td>
       <td>{{.HWAccel}}{{if .Fallback}} <span class="badge">fallback</span>{{end}}</td>
       <td>{{ms .Millis}}</td>
       <td class="muted">{{ago .At}}</td>
@@ -100,7 +100,7 @@
 
 {{define "problems"}}
 {{if or .Failed .ProbeErrs}}
-<h2>Problems</h2>
+<h2>{{icon "alert"}} Problems</h2>
 <div class="card scroll">
 <table>
   <thead><tr><th>Video</th><th>Problem</th><th></th></tr></thead>
@@ -108,15 +108,15 @@
   {{range .ProbeErrs}}
     <tr>
       <td class="name">{{.Name}}<div class="muted mono">{{.Root}}/{{.Path}}</div></td>
-      <td><span class="err-text">Couldn't read metadata</span><div class="muted mono">{{.ProbeErr}}</div></td>
-      <td><button class="small" hx-post="/admin/a/items/{{.ID}}/reprobe" hx-target="#toast" hx-disabled-elt="this">Re-probe</button></td>
+      <td><span class="err-text">{{icon "alert"}} Couldn't read metadata</span><div class="muted mono">{{.ProbeErr}}</div></td>
+      <td><button class="small" hx-post="/admin/a/items/{{.ID}}/reprobe" hx-target="#toast" hx-disabled-elt="this">{{icon "search"}} Re-probe</button></td>
     </tr>
   {{end}}
   {{range .Failed}}
     <tr>
       <td class="name">{{.Name}}<div class="muted mono">{{.Root}}/{{.Path}}</div></td>
-      <td><span class="err-text">Thumbnails failed</span>{{with .TrickErr}}<div class="muted mono">{{.}}</div>{{end}}</td>
-      <td><button class="small" hx-post="/admin/a/items/{{.ID}}/thumbnails" hx-target="#toast" hx-disabled-elt="this">Retry</button></td>
+      <td><span class="err-text">{{icon "alert"}} Thumbnails failed</span>{{with .TrickErr}}<div class="muted mono">{{.}}</div>{{end}}</td>
+      <td><button class="small" hx-post="/admin/a/items/{{.ID}}/thumbnails" hx-target="#toast" hx-disabled-elt="this">{{icon "replay"}} Retry</button></td>
     </tr>
   {{end}}
   </tbody>
@@ -162,7 +162,7 @@
   {{range .tests}}
     <tr>
       <td>{{.Name}}</td>
-      <td>{{if .OK}}<span class="ok-text">Works</span>{{else if .Skipped}}<span class="muted">Skipped: {{.Skipped}}</span>{{else}}<span class="err-text">Failed</span><div class="muted mono">{{.Error}}</div>{{end}}</td>
+      <td>{{if .OK}}<span class="ok-text">{{icon "check"}} Works</span>{{else if .Skipped}}<span class="muted">Skipped: {{.Skipped}}</span>{{else}}<span class="err-text">{{icon "alert"}} Failed</span><div class="muted mono">{{.Error}}</div>{{end}}</td>
       <td>{{if .Millis}}{{ms .Millis}}{{end}}</td>
     </tr>
   {{end}}

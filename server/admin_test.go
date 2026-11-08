@@ -39,14 +39,19 @@ func TestAdminFragmentsAndActions(t *testing.T) {
 	for path, want := range map[string]string{
 		"/admin/assets/htmx.min.js": "var htmx", "/admin/assets/admin.css": "/* Colours",
 		"/admin/assets/admin.js": "const KEY", "/admin/assets/library.js": "// Library page",
-		"/admin/library": "<title>Library",
+		"/admin/library":          "<title>Library",
+		"/admin/assets/icons.svg": `<symbol id="film"`, "/admin/assets/riffle-lockup.svg": "<svg",
+		"/admin/assets/favicon.svg": "<svg", "/admin/assets/empty-library.svg": "<svg",
+		"/favicon.ico": "\x00\x00\x01\x00", // ICO header
 	} {
 		if res, body := get(t, srv.URL+path, nil); res.StatusCode != 200 || !strings.Contains(body, want) {
 			t.Errorf("%s: %d, missing %q", path, res.StatusCode, want)
 		}
 	}
-	if res, _ := get(t, srv.URL+"/admin/assets/fragments.html", nil); res.StatusCode != 404 {
-		t.Errorf("templates must not be served as assets: %d", res.StatusCode)
+	for _, path := range []string{"fragments.html", "index.html", "nope.svg", "admin.go"} {
+		if res, _ := get(t, srv.URL+"/admin/assets/"+path, nil); res.StatusCode != 404 {
+			t.Errorf("/admin/assets/%s: %d, want 404", path, res.StatusCode)
+		}
 	}
 
 	fragments := map[string]string{
@@ -54,6 +59,7 @@ func TestAdminFragmentsAndActions(t *testing.T) {
 		"jobs": "No jobs", "problems": "",
 		"libfilters": `<option value="Test">Test (1)</option>`, "browse": "1 video",
 		"browse?q=nothing-matches": "No videos match", "browse?state=failed": "No videos match",
+		"overview?icons":                      `icons.svg#server`,
 		"browse?q=CLIP&folder=Test&sort=size": "clip.mp4",
 	}
 	if _, err := exec.LookPath("ffmpeg"); err == nil {
@@ -130,7 +136,7 @@ func TestAdminItemView(t *testing.T) {
 		t.Fatalf("item: %d %s", res.StatusCode, body)
 	}
 	// No probe and no trickplay yet: no scrub preview, a note instead.
-	if strings.Contains(body, `class="scrub"`) || !strings.Contains(body, "Previews aren") {
+	if strings.Contains(body, `class="scrub"`) || !strings.Contains(body, "Making scrub previews") {
 		t.Errorf("item without trickplay: %s", body)
 	}
 	if res, _ := get(t, srv.URL+"/admin/f/item/nope", auth); res.StatusCode != 404 {

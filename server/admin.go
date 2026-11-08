@@ -35,7 +35,12 @@ var adminTmpl = template.Must(template.New("").Funcs(template.FuncMap{
 		return n * 100 / total
 	},
 	"timecode": timecode,
-	"mbps":     func(bps int64) string { return fmt.Sprintf("%.1f Mb/s", float64(bps)/1e6) },
+	// icon draws a glyph from admin/icons.svg (stand-ins for the design's SF Symbols).
+	"icon": func(name string) template.HTML {
+		return template.HTML(`<svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#` +
+			template.HTMLEscapeString(name) + `"/></svg>`)
+	},
+	"mbps": func(bps int64) string { return fmt.Sprintf("%.1f Mb/s", float64(bps)/1e6) },
 	"ms": func(ms int64) string {
 		return (time.Duration(ms) * time.Millisecond).Round(10 * time.Millisecond).String()
 	},
@@ -51,20 +56,32 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("GET /admin/{$}", page("index.html"))
 	mux.HandleFunc("GET /admin/library", page("library.html"))
-	// Shared assets. no-cache (revalidated by modification time) so a server update is
-	// picked up straight away; htmx itself never changes between releases.
+	// Shared assets: scripts, styles, icons, logos, illustrations and favicons (never the
+	// HTML templates). no-cache so a server update is picked up straight away; htmx itself
+	// never changes between releases.
 	mux.HandleFunc("GET /admin/assets/{file}", func(w http.ResponseWriter, r *http.Request) {
 		file := r.PathValue("file")
-		switch file {
-		case "htmx.min.js":
-			w.Header().Set("Cache-Control", "public, max-age=86400")
-		case "admin.css", "admin.js", "library.js":
-			w.Header().Set("Cache-Control", "no-cache")
+		switch filepath.Ext(file) {
+		case ".js", ".css", ".svg", ".png", ".ico":
 		default:
 			http.NotFound(w, r)
 			return
 		}
+		if _, err := fs.Stat(adminFS, "admin/"+file); err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if file == "htmx.min.js" {
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		http.ServeFileFS(w, r, adminFS, "admin/"+file)
+	})
+	// Browsers ask for /favicon.ico on every page, the API's included.
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		http.ServeFileFS(w, r, adminFS, "admin/favicon.ico")
 	})
 	mux.HandleFunc("GET /admin/f/item/{id}", s.auth(s.adminItem))
 	mux.HandleFunc("GET /admin/f/{name}", s.auth(s.adminFragment))
