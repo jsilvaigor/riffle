@@ -80,25 +80,104 @@ htmx.onLoad((root) => {
   root.querySelectorAll?.(".scrub").forEach(initScrub);
 });
 
-// The item view opens in a dialog and is linkable: /admin/library#item=<id>.
+// Navigation state lives in the hash: #folder=<path>&item=<id>. Picking a folder pushes
+// a history entry, so back and forward walk the folders; the item view replaces it.
+const form = document.getElementById("filters");
+const folderInput = document.getElementById("folder-input");
 const dialog = document.getElementById("item");
-function openItem(id) {
-  htmx.ajax("GET", "/admin/f/item/" + encodeURIComponent(id), { target: dialog });
+
+function hashParams() { return new URLSearchParams(location.hash.slice(1)); }
+function setHash(params, push) {
+  const h = params.toString();
+  const url = h ? "#" + h : location.pathname;
+  if (push) history.pushState(null, "", url); else history.replaceState(null, "", url);
 }
-document.addEventListener("htmx:afterSwap", (e) => {
-  if (e.detail.target !== dialog) return;
-  if (!dialog.open) dialog.showModal();
-  const id = e.detail.pathInfo.requestPath.split("/").pop();
-  history.replaceState(null, "", "#item=" + id);
+function browse(folder) {
+  folderInput.value = folder;
+  htmx.trigger(form, "browse");
+}
+function goFolder(folder) {
+  const p = hashParams();
+  p.delete("item");
+  if (folder) p.set("folder", folder); else p.delete("folder");
+  setHash(p, true);
+  form.elements.q.value = ""; // a new folder starts unsearched
+  browse(folder);
+}
+
+// Folder links: tree, breadcrumb and folder tiles all carry data-folder.
+document.addEventListener("click", (e) => {
+  const twisty = e.target.closest(".twisty");
+  if (twisty && twisty.tagName === "BUTTON") {
+    const li = twisty.closest("li");
+    li.setAttribute("aria-expanded", li.getAttribute("aria-expanded") === "true" ? "false" : "true");
+    return;
+  }
+  const a = e.target.closest("a[data-folder]");
+  if (!a) return;
+  e.preventDefault();
+  goFolder(a.dataset.folder);
 });
-// Click on the backdrop closes the item view.
+window.addEventListener("popstate", () => {
+  if (dialog.open) dialog.close();
+  browse(hashParams().get("folder") || "");
+});
+
+// Show the current folder in the tree: highlight it and open its ancestors.
+function markTree() {
+  const folder = folderInput.value;
+  document.querySelectorAll("#tree a[aria-current]").forEach((a) => a.removeAttribute("aria-current"));
+  const li = [...document.querySelectorAll("#tree li[data-path]")].find((el) => el.dataset.path === folder);
+  if (!li) return;
+  li.querySelector(":scope > .node > a").setAttribute("aria-current", "page");
+  for (let up = li.parentElement.closest("li"); up; up = up.parentElement.closest("li")) {
+    up.setAttribute("aria-expanded", "true");
+  }
+  li.querySelector(":scope > .node").scrollIntoView({ block: "nearest" });
+}
+
+document.addEventListener("htmx:afterSwap", (e) => {
+  const t = e.detail.target;
+  if (t.id === "tree") {
+    // Top-level folders start open.
+    t.querySelectorAll(".tree-root > li[aria-expanded]").forEach((li) => li.setAttribute("aria-expanded", "true"));
+    markTree();
+  } else if (t.id === "results") {
+    // The server resolves the folder (e.g. a single media root is opened directly).
+    const head = t.querySelector(".browse-head");
+    if (head) {
+      folderInput.value = head.dataset.folder;
+      const name = head.dataset.folder.split("/").pop();
+      form.elements.q.placeholder = name ? `Search in ${name}` : "Search all folders";
+      markTree();
+    }
+  } else if (t === dialog) {
+    if (!dialog.open) dialog.showModal();
+    const p = hashParams();
+    p.set("item", e.detail.pathInfo.requestPath.split("/").pop());
+    setHash(p, false);
+  }
+});
+
+// The item view opens in a dialog. Click on the backdrop closes it.
 dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
 dialog.addEventListener("close", () => {
   dialog.innerHTML = "";
-  history.replaceState(null, "", location.pathname);
+  const p = hashParams();
+  p.delete("item");
+  setHash(p, false);
 });
-// Open a linked item once the token check has run (admin.js fires "refresh").
+
+// admin.js fires "refresh" once the token check passes, and again after each action.
+// The first one opens the linked folder (and item); later ones reload the current folder.
+let started = false;
 document.body.addEventListener("refresh", () => {
-  const m = location.hash.match(/^#item=([0-9a-f]+)$/);
-  if (m && !dialog.open) openItem(m[1]);
-}, { once: true });
+  if (started) { browse(folderInput.value); return; }
+  started = true;
+  const p = hashParams();
+  browse(p.get("folder") || "");
+  const item = p.get("item");
+  if (item && /^[0-9a-f]+$/.test(item)) {
+    htmx.ajax("GET", "/admin/f/item/" + item, { target: dialog });
+  }
+});

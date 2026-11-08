@@ -57,7 +57,7 @@ func TestAdminFragmentsAndActions(t *testing.T) {
 	fragments := map[string]string{
 		"overview": "1 <span>videos</span>", "storage": "Thumbnail sheets", "breakdown": "Container",
 		"jobs": "No jobs", "problems": "",
-		"libfilters": `<option value="Test">Test (1)</option>`, "browse": "1 video",
+		"tree": `data-path="Test"`, "browse": "1 video",
 		"browse?q=nothing-matches": "No videos match", "browse?state=failed": "No videos match",
 		"overview?icons":                      `icons.svg#server`,
 		"browse?q=CLIP&folder=Test&sort=size": "clip.mp4",
@@ -155,20 +155,64 @@ func TestTimecode(t *testing.T) {
 	}
 }
 
-func TestAdminBrowsePaging(t *testing.T) {
-	s := testLibServer(t, 130)
-	res, body := get(t, s.URL+"/admin/f/browse", nil)
-	if res.StatusCode != 200 || !strings.Contains(body, "130 videos") || strings.Count(body, `class="tile"`) != 60 ||
-		!strings.Contains(body, `"offset": 60`) || !strings.Contains(body, "70 left") {
-		t.Fatalf("first page: %d, %d tiles", res.StatusCode, strings.Count(body, `class="tile"`))
+func TestAdminExplorer(t *testing.T) {
+	s := testLibServer(t, 130) // 60 videos directly in Test, 70 in Test/sub
+	tiles := func(body string) int { return strings.Count(body, `class="tile"`) }
+
+	// One media root: browsing starts inside it, with its subfolder and own videos.
+	_, body := get(t, s.URL+"/admin/f/browse", nil)
+	if !strings.Contains(body, `data-folder="Test"`) || !strings.Contains(body, "1 folder · 60 videos") ||
+		!strings.Contains(body, `class="tile folder-tile" href="#" data-folder="Test/sub"`) ||
+		tiles(body) != 60 || strings.Contains(body, "Show more") {
+		t.Fatalf("root folder: %d tiles\n%s", tiles(body), body[:min(len(body), 600)])
 	}
-	_, body = get(t, s.URL+"/admin/f/browse?offset=120", nil)
-	if strings.Count(body, `class="tile"`) != 10 || strings.Contains(body, "Show more") || strings.Contains(body, "videos</p>") {
-		t.Fatalf("last page: %d tiles", strings.Count(body, `class="tile"`))
+	// A subfolder: only its own videos, paged.
+	_, body = get(t, s.URL+"/admin/f/browse?folder=Test/sub", nil)
+	if !strings.Contains(body, "70 videos") || tiles(body) != 60 || !strings.Contains(body, "10 left") ||
+		!strings.Contains(body, `data-folder="Test/sub">sub</a>`) {
+		t.Fatalf("subfolder: %d tiles", tiles(body))
 	}
-	_, body = get(t, s.URL+"/admin/f/browse?folder=Test/sub&q=v-01", nil)
-	if !strings.Contains(body, "10 videos") { // v-010 … v-019, all in Test/sub
-		t.Fatalf("folder+search: %s", body[:min(len(body), 200)])
+	_, body = get(t, s.URL+"/admin/f/browse?folder=Test/sub&offset=60", nil)
+	if tiles(body) != 10 || strings.Contains(body, "browse-head") {
+		t.Fatalf("subfolder page 2: %d tiles", tiles(body))
+	}
+	// Searching looks through subfolders and says where each result is.
+	_, body = get(t, s.URL+"/admin/f/browse?folder=Test&q=v-01", nil)
+	if !strings.Contains(body, "10 matches in this folder and its subfolders") || tiles(body) != 10 ||
+		!strings.Contains(body, `title="sub"`) || strings.Contains(body, "folder-tile") {
+		t.Fatalf("search: %d tiles", tiles(body))
+	}
+	// Unknown folders fall back to the top.
+	if _, body = get(t, s.URL+"/admin/f/browse?folder=Nope/x", nil); !strings.Contains(body, `data-folder="Test"`) {
+		t.Fatalf("unknown folder")
+	}
+	// The tree has both folders with recursive counts.
+	_, body = get(t, s.URL+"/admin/f/tree", nil)
+	if !strings.Contains(body, `<span class="name">Test</span><span class="count">130</span>`) ||
+		!strings.Contains(body, `<span class="name">sub</span><span class="count">70</span>`) {
+		t.Fatalf("tree: %s", body)
+	}
+}
+
+func TestLibraryTreeMultiRoot(t *testing.T) {
+	cfg := Config{Roots: []MediaRoot{{"Movies", "/m"}, {"TV", "/t"}}}
+	s := &Server{cfg: cfg}
+	roots, index := s.libraryTree([]Item{
+		{Root: "TV", Path: "Show/S01/e1.mkv"}, {Root: "TV", Path: "Show/S01/e2.mkv"},
+		{Root: "TV", Path: "Show/S02/e1.mkv"}, {Root: "Movies", Path: "a.mp4"},
+		{Root: "Old", Path: "x.mp4"}, // a root no longer configured
+	})
+	if len(roots) != 3 || roots[0].Name != "Movies" || roots[1].Name != "TV" || roots[2].Name != "Old" {
+		t.Fatalf("roots: %+v", roots)
+	}
+	if n := index["TV/Show"]; n == nil || n.Count != 3 || n.Direct != 0 || len(n.Children) != 2 {
+		t.Fatalf("TV/Show: %+v", n)
+	}
+	if n := index["TV/Show/S01"]; n.Count != 2 || n.Direct != 2 {
+		t.Fatalf("S01: %+v", n)
+	}
+	if index["TV"].Count != 3 || index["Movies"].Direct != 1 {
+		t.Fatalf("root counts")
 	}
 }
 

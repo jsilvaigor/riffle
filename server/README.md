@@ -157,14 +157,17 @@ breakdown every minute) and shows:
   resolution and orientation
 - **Hardware tests:** the `/api/diagnostics` decode tests, run on demand
 
-The **Library** page (`/admin/library`) browses the library without playing anything: a
-grid of posters (60 at a time, "Show more" for the rest) with search, a folder filter
-(subfolders included), filters for thumbnail state, unreadable metadata, portrait videos
-and started videos, and sorting by name, recently changed, size or duration. Clicking a
-video opens its details: a hover-scrub preview built from the trickplay sheets (the same
+The **Library** page (`/admin/library`) browses the library like a file explorer, without
+playing anything: a folder tree on the left (with video counts), and on the right the
+selected folder's breadcrumb, its subfolders as folder tiles, and its own videos as a
+poster grid (60 at a time, "Show more" for the rest). Search and the filters (thumbnail
+state, unreadable metadata, portrait, started) look through the selected folder and its
+subfolders, and say where each result is; sort by name, recently changed, size or
+duration. The folder is in the URL (`#folder=…`), so back and forward walk the folders.
+Clicking a video opens its details: a hover-scrub preview built from the trickplay sheets (the same
 frames the app shows while scrubbing), the sheets themselves, metadata (codec, stored and
 displayed size, rotation, audio and subtitle tracks), the resume position, and **Rebuild
-thumbnails** / **Re-probe**. Details are linkable as `/admin/library#item=<id>`. Images
+thumbnails** / **Re-probe**. Details are linkable as `/admin/library#folder=…&item=<id>`. Images
 load through the API with the token as `?token=`, since `<img>` can't send headers.
 
 ### Diagnostics

@@ -18,7 +18,7 @@
 <header>
   <h1><a class="brand" href="/admin/"><img src="/admin/assets/riffle-lockup.svg" alt="Riffle" width="98" height="30"><span>Server admin</span></a></h1>
   <nav><a href="/admin/"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#gauge"/></svg> Overview</a><a href="/admin/library" aria-current="page"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#stack"/></svg> Library</a></nav>
-  <button id="token-btn" class="link" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#key"/></svg> Change token</button>
+  <button id="token-btn" class="link" type="button" aria-label="Change token"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#key"/></svg><span class="label">Change token</span></button>
 </header>
 
 <section id="offline" class="empty" hidden>
@@ -41,12 +41,39 @@
   </form>
 </section>
 
-<main id="panels">
-  <!-- The filter form (with the folder list) loads first, then loads the results. -->
-  <div hx-get="/admin/f/libfilters" hx-trigger="refresh from:body once" hx-swap="outerHTML">
-    <p class="placeholder">Loading…</p>
-  </div>
-  <div id="results"></div>
+<main id="panels" class="explorer">
+  <aside class="tree-pane">
+    <div id="tree" hx-get="/admin/f/tree" hx-trigger="refresh from:body once">
+      <p class="placeholder">Loading…</p>
+    </div>
+  </aside>
+
+  <section class="browser">
+    <!-- library.js sets the folder and fires "browse" (on load and when a folder is picked). -->
+    <form id="filters" class="filters" role="search"
+          hx-get="/admin/f/browse" hx-target="#results" hx-sync="this:replace"
+          hx-trigger="browse, change, input delay:300ms">
+      <input type="hidden" name="folder" id="folder-input">
+      <label class="search"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#search"/></svg><input type="search" name="q" placeholder="Search this folder"
+        aria-label="Search this folder and its subfolders" autocomplete="off"></label>
+      <select name="state" aria-label="Show">
+        <option value="">All videos</option>
+        <option value="ready">Thumbnails ready</option>
+        <option value="pending">Thumbnails pending</option>
+        <option value="failed">Thumbnails failed</option>
+        <option value="probe-error">Unreadable metadata</option>
+        <option value="portrait">Portrait</option>
+        <option value="watched">Started watching</option>
+      </select>
+      <select name="sort" aria-label="Sort by">
+        <option value="">Name</option>
+        <option value="recent">Recently changed</option>
+        <option value="size">Largest</option>
+        <option value="duration">Longest</option>
+      </select>
+    </form>
+    <div id="results"></div>
+  </section>
 </main>
 
 <dialog id="item" aria-label="Video details"></dialog>
