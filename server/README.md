@@ -112,8 +112,11 @@ Each item's `probe.video` carries the stored `width` and `height`, plus:
   pixels. The iOS player picks its orientation from these (see `design/player.md`).
 
 ffmpeg and mpv apply the rotation themselves, so thumbnails and playback are already
-upright. Items indexed by an older server are re-probed once on the next scan
-(`probe.v` tracks this); their thumbnails are kept.
+upright. Trickplay tiles take the display shape too: a portrait phone clip gets 9:16 tiles
+and an anamorphic DVD rip 16:9 ones. Items indexed by an older server are re-probed once on
+the next scan (`probe.v` tracks this, and the log and `/api/diagnostics` count them as
+`reprobe`); their thumbnails are kept unless the tiles don't match the display shape, as
+with anamorphic videos thumbnailed before 0.2.2.
 
 ### Trickplay manifest
 
@@ -151,7 +154,8 @@ Everything runs through the `Makefile` in `server/` (`make help` lists the targe
 
 ```sh
 make test          # gofmt, vet, race build, unit tests
-make media         # test videos in testdata/media (h264 mkv, hevc mp4, wmv2 wmv, 4 s portrait)
+make media         # test videos in testdata/media: h264 mkv, hevc mp4, wmv2 wmv, short portrait,
+                   # phone portrait (rotation flag), anamorphic mkv; skips files that exist
 make dev           # run natively on CPU against testdata/media, token "dev"
 make build run     # same in Docker (docker-compose.yml), then `make logs` / `make stop`
 make diag          # call /api/diagnostics on localhost (URL= and TOKEN= to point elsewhere)

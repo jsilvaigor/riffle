@@ -30,6 +30,9 @@ ENV RIFFLE_ADDR=:8770 \
 
 COPY --from=build /out/riffle-server /usr/local/bin/riffle-server
 
+# Owned by the runtime user, so the default volume is writable when no /data is mounted.
+RUN mkdir -p /data && chown 99:100 /data
+
 EXPOSE 8770
 VOLUME /data
 # Unraid's nobody:users, so files in appdata keep the usual ownership.

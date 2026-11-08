@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -73,6 +76,10 @@ func TestProbeRotationAndDisplaySize(t *testing.T) {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		t.Skip("ffmpeg not installed")
 	}
+	// -display_rotation, used to make the rotated clips, needs ffmpeg 6.1 or newer.
+	if help, _ := exec.Command("ffmpeg", "-hide_banner", "-h", "full").Output(); !strings.Contains(string(help), "display_rotation") {
+		t.Skip("ffmpeg too old for -display_rotation")
+	}
 	dir := t.TempDir()
 	plain := filepath.Join(dir, "plain.mp4")
 	makeClip(t, plain, nil)
@@ -140,12 +147,63 @@ func TestScanReprobesOlderIndex(t *testing.T) {
 	lib.mu.Unlock()
 
 	lib.Scan(context.Background())
-	if st := lib.Status(); st.ToProbe != 1 {
-		t.Errorf("rescan probed %d items, want 1", st.ToProbe)
+	if st := lib.Status(); st.ToProbe != 1 || st.Reprobe != 1 {
+		t.Errorf("rescan: toProbe %d, reprobe %d, want 1 and 1", st.ToProbe, st.Reprobe)
 	}
 	lib.mu.Lock()
 	defer lib.mu.Unlock()
 	if a.Probe.Version != probeVersion || a.Probe.Video.DisplayWidth != 320 || a.Trickplay != TrickReady {
 		t.Errorf("after re-probe: version %d, displayWidth %d, trickplay %q", a.Probe.Version, a.Probe.Video.DisplayWidth, a.Trickplay)
+	}
+}
+
+// Anamorphic video (720x480 stored, 16:9 shown) must get 16:9 tiles, and tiles made by
+// an older server in the stored shape are regenerated when the item is re-probed.
+func TestAnamorphicTiles(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	media, data := t.TempDir(), t.TempDir()
+	makeClip(t, filepath.Join(media, "dvd.mkv"), nil, "-vf", "scale=720:480,setsar=32/27")
+	cfg := Config{Roots: []MediaRoot{{"Test", media}}, DataDir: data, HWAccel: "none",
+		Interval: 5, TileWidth: 320}
+	lib := NewLibrary(cfg)
+	lib.Scan(context.Background())
+	id := itemID("Test", "dvd.mkv")
+	trick := NewTrickplay(cfg, lib)
+	if _, err := trick.generate(context.Background(), id); err != nil {
+		t.Fatal(err)
+	}
+	lib.SetTrickplay(id, TrickReady)
+	manifest := filepath.Join(trick.Dir(id), "manifest.json")
+	b, _ := os.ReadFile(manifest)
+	var m Manifest
+	json.Unmarshal(b, &m)
+	if m.TileWidth != 320 || m.TileHeight != 180 {
+		t.Errorf("tile %dx%d, want 320x180", m.TileWidth, m.TileHeight)
+	}
+
+	lib.mu.Lock()
+	it := lib.items[id]
+	if lib.tilesStale(it) {
+		t.Errorf("fresh tiles reported stale")
+	}
+	lib.mu.Unlock()
+
+	// Simulate an older server: tiles in the stored 3:2 shape, probe from before v2.
+	m.TileHeight = 214
+	b, _ = json.Marshal(m)
+	os.WriteFile(manifest, b, 0o644)
+	lib.mu.Lock()
+	it.Probe.Version = 1
+	lib.mu.Unlock()
+	queued := 0
+	lib.onNew = func(*Item) { queued++ }
+	lib.Scan(context.Background())
+	lib.mu.RLock()
+	state := it.Trickplay
+	lib.mu.RUnlock()
+	if state != TrickNone || queued != 1 {
+		t.Errorf("stale tiles: trickplay %q, queued %d; want none and requeued once", state, queued)
 	}
 }
