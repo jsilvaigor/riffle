@@ -1,0 +1,253 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"image/jpeg"
+	"log"
+	"math"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+// Trickplay sheets are grids of small thumbnails, one every Interval seconds.
+// Thumbnail k (0-based) shows time k*Interval and lives in sheet k/(Columns*Rows)
+// at cell k%(Columns*Rows), read left-to-right, top-to-bottom.
+type Manifest struct {
+	Interval   float64 `json:"interval"`
+	TileWidth  int     `json:"tileWidth"`
+	TileHeight int     `json:"tileHeight"`
+	Columns    int     `json:"columns"`
+	Rows       int     `json:"rows"`
+	Count      int     `json:"count"`
+	Sheets     int     `json:"sheets"`
+	Format     string  `json:"format"`
+}
+
+const (
+	sheetCols = 10
+	sheetRows = 10
+)
+
+// trickQueue is a FIFO with "jump to front" for items a viewer is waiting on.
+type trickQueue struct {
+	mu     sync.Mutex
+	cond   *sync.Cond
+	list   []string
+	queued map[string]bool
+}
+
+func newTrickQueue() *trickQueue {
+	q := &trickQueue{queued: map[string]bool{}}
+	q.cond = sync.NewCond(&q.mu)
+	return q
+}
+
+func (q *trickQueue) push(id string, front bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.queued[id] {
+		if !front {
+			return
+		}
+		for i, v := range q.list {
+			if v == id {
+				q.list = append(q.list[:i], q.list[i+1:]...)
+				break
+			}
+		}
+	}
+	q.queued[id] = true
+	if front {
+		q.list = append([]string{id}, q.list...)
+	} else {
+		q.list = append(q.list, id)
+	}
+	q.cond.Signal()
+}
+
+func (q *trickQueue) pop(ctx context.Context) (string, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for len(q.list) == 0 {
+		if ctx.Err() != nil {
+			return "", false
+		}
+		q.cond.Wait()
+	}
+	id := q.list[0]
+	q.list = q.list[1:]
+	delete(q.queued, id)
+	return id, true
+}
+
+type Trickplay struct {
+	cfg      Config
+	lib      *Library
+	q        *trickQueue
+	hwBroken atomic.Bool
+}
+
+func NewTrickplay(cfg Config, lib *Library) *Trickplay {
+	return &Trickplay{cfg: cfg, lib: lib, q: newTrickQueue()}
+}
+
+func (t *Trickplay) Dir(id string) string {
+	return filepath.Join(t.cfg.DataDir, "trickplay", id)
+}
+
+func (t *Trickplay) Start(ctx context.Context) {
+	go func() { <-ctx.Done(); t.q.mu.Lock(); t.q.cond.Broadcast(); t.q.mu.Unlock() }()
+	for i := 0; i < t.cfg.Workers; i++ {
+		go t.worker(ctx)
+	}
+}
+
+// Enqueue schedules generation; priority puts it ahead of the background backlog.
+func (t *Trickplay) Enqueue(id string, priority bool) {
+	t.lib.SetTrickplay(id, TrickPending)
+	t.q.push(id, priority)
+}
+
+func (t *Trickplay) worker(ctx context.Context) {
+	for {
+		id, ok := t.q.pop(ctx)
+		if !ok {
+			return
+		}
+		start := time.Now()
+		if err := t.generate(ctx, id); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			log.Printf("trickplay %s: %v", id, err)
+			t.lib.SetTrickplay(id, TrickFailed)
+		} else {
+			log.Printf("trickplay %s: done in %s", id, time.Since(start).Round(time.Millisecond))
+			t.lib.SetTrickplay(id, TrickReady)
+		}
+		t.lib.save()
+	}
+}
+
+func (t *Trickplay) generate(ctx context.Context, id string) error {
+	t.lib.mu.RLock()
+	it, ok := t.lib.items[id]
+	var abs string
+	var probe *Probe
+	if ok {
+		abs, probe = it.abs, it.Probe
+	}
+	t.lib.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("item no longer in library")
+	}
+	if probe == nil || probe.Video == nil || probe.Duration <= 0 {
+		return fmt.Errorf("no video stream or unknown duration")
+	}
+
+	interval := t.cfg.Interval
+	if probe.Duration/interval < 100 { // short clips: aim for ~100 thumbnails
+		interval = math.Max(1, probe.Duration/100)
+	}
+	count := int(math.Ceil(probe.Duration / interval))
+	perSheet := sheetCols * sheetRows
+
+	dir := t.Dir(id)
+	tmp := dir + ".tmp"
+	os.RemoveAll(tmp)
+	if err := os.MkdirAll(tmp, 0o755); err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+
+	hw := t.cfg.HWAccel
+	if t.hwBroken.Load() {
+		hw = "none"
+	}
+	err := t.runFFmpeg(ctx, hw, abs, probe.Video.Index, interval, tmp)
+	if err != nil && hw != "none" {
+		if strings.Contains(err.Error(), "Device creation failed") {
+			t.hwBroken.Store(true)
+			log.Printf("trickplay: %s device unavailable, using CPU from now on "+
+				"(check --runtime=nvidia / device passthrough): %v", hw, err)
+		} else {
+			log.Printf("trickplay %s: %s decode failed, retrying on CPU: %v", id, hw, err)
+		}
+		os.RemoveAll(tmp)
+		os.MkdirAll(tmp, 0o755)
+		err = t.runFFmpeg(ctx, "none", abs, probe.Video.Index, interval, tmp)
+	}
+	if err != nil {
+		return err
+	}
+
+	sheets, _ := filepath.Glob(filepath.Join(tmp, "*.jpg"))
+	if len(sheets) == 0 {
+		return fmt.Errorf("ffmpeg produced no sheets")
+	}
+	f, err := os.Open(sheets[0])
+	if err != nil {
+		return err
+	}
+	cfgImg, err := jpeg.DecodeConfig(f)
+	f.Close()
+	if err != nil {
+		return fmt.Errorf("reading sheet: %w", err)
+	}
+	if count > len(sheets)*perSheet {
+		count = len(sheets) * perSheet
+	}
+	m := Manifest{
+		Interval: interval, TileWidth: cfgImg.Width / sheetCols, TileHeight: cfgImg.Height / sheetRows,
+		Columns: sheetCols, Rows: sheetRows, Count: count, Sheets: len(sheets), Format: "jpg",
+	}
+	b, _ := json.MarshalIndent(m, "", "  ")
+	if err := os.WriteFile(filepath.Join(tmp, "manifest.json"), b, 0o644); err != nil {
+		return err
+	}
+	os.RemoveAll(dir)
+	return os.Rename(tmp, dir)
+}
+
+func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, interval float64, outDir string) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer cancel()
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y"}
+	switch hw {
+	case "cuda":
+		args = append(args, "-hwaccel", "cuda")
+	case "vaapi":
+		args = append(args, "-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128")
+	}
+	// -skip_frame nokey decodes keyframes only: 10-50x less work than a full decode,
+	// at the cost of thumbnails snapping to the nearest keyframe (usually <2-5 s away).
+	if !t.cfg.Accurate {
+		args = append(args, "-skip_frame", "nokey")
+	}
+	args = append(args,
+		"-i", src,
+		"-map", fmt.Sprintf("0:%d", stream), "-an", "-sn", "-dn",
+		"-vf", fmt.Sprintf("fps=%.6f,scale=%d:-2:flags=bilinear,tile=%dx%d",
+			1/interval, t.cfg.TileWidth, sheetCols, sheetRows),
+		"-q:v", "5", "-start_number", "0",
+		filepath.Join(outDir, "%03d.jpg"),
+	)
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if len(msg) > 500 {
+			msg = msg[len(msg)-500:]
+		}
+		return fmt.Errorf("%v: %s", err, msg)
+	}
+	return nil
+}
