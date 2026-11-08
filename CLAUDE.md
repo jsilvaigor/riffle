@@ -14,6 +14,27 @@ performance is the top priority.** Read `docs/architecture.md` for decisions and
   (orientation follows the video, gestures, scrubbing). Build iOS UI from these.
 - `docs/`: architecture and decisions.
 
+## Git workflow
+
+Several agent sessions work in this repo at once, and the main checkout
+(`~/Projects/riffle`) is the owner's. One session once committed another's untracked work
+with `git add -A`, then a branch switch removed those files from disk. To avoid that:
+
+- **Work in your own worktree.** Start each task with
+  `git worktree add ../riffle-<task> -b <branch> origin/main` and make every edit, build
+  and commit there. Don't edit, commit or switch branches in the main checkout. Remove the
+  worktree once the PR is merged (`git worktree remove ../riffle-<task>`). For subagents,
+  use the Agent tool's `isolation: "worktree"`.
+- **Stage files by name** (`git add server/foo.go`). Never `git add -A`, `git add .` or
+  `git commit -a`, and read `git status` before each commit.
+- **Leave others' files alone.** Files you didn't create or change in this task aren't
+  yours: don't commit, stash, move or delete them, even if they're untracked.
+- **One PR per task**; the owner merges. Releases (`cd server && make release`) run from
+  the main checkout on an up-to-date `main`; they only commit `server/VERSION`.
+- A new worktree has no `server/testdata/` or `server/data/` (both gitignored): run
+  `make media` there. If another session's server is on port 8770, use
+  `RIFFLE_ADDR=:8771 make dev`.
+
 ## Server conventions
 
 - Standard library only unless there's a strong reason; ask before adding a dependency.
