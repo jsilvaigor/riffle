@@ -33,6 +33,12 @@ media: ## generate test videos in testdata/media
 		-c:v wmv2 -b:v 1M testdata/media/wmv2.wmv || true
 	ffmpeg -hide_banner -loglevel error -n -f lavfi -i testsrc2=duration=4:size=1080x1430:rate=30 \
 		-c:v libx264 -g 250 testdata/media/short-portrait.mp4 || true
+	@# A phone-style portrait clip: landscape pixels plus a 90° display rotation.
+	ffmpeg -hide_banner -loglevel error -n -f lavfi -i testsrc2=duration=30:size=1920x1080:rate=30 \
+		-c:v libx264 -preset veryfast -crf 30 -g 60 /tmp/riffle-portrait-raw.mp4 && \
+		ffmpeg -hide_banner -loglevel error -n -display_rotation:v:0 -90 -i /tmp/riffle-portrait-raw.mp4 \
+		-c copy testdata/media/portrait-phone.mp4 || true
+	@rm -f /tmp/riffle-portrait-raw.mp4
 
 dev: ## run the server natively against testdata/media (CPU decoding)
 	RIFFLE_MEDIA=Test=$(CURDIR)/testdata/media RIFFLE_DATA=$(CURDIR)/data RIFFLE_TOKEN=$(TOKEN) \

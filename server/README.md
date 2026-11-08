@@ -101,6 +101,20 @@ All endpoints except `/api/health` require the token, sent as `Authorization: Be
 | `GET /api/progress` | All resume positions (gzip and `ETag` like the library) |
 | `PUT /api/items/{id}/progress` | `{"position": 123.4, "duration": 5400}` |
 
+### Video metadata
+
+Each item's `probe.video` carries the stored `width` and `height`, plus:
+
+- `rotation`: degrees the stored frame turns clockwise to display (0, 90, 180, 270). Phones
+  store most portrait clips as landscape pixels with a rotation, so `width` > `height`
+  doesn't mean the video is landscape.
+- `displayWidth`, `displayHeight`: the size it's shown at, after rotation and non-square
+  pixels. The iOS player picks its orientation from these (see `design/player.md`).
+
+ffmpeg and mpv apply the rotation themselves, so thumbnails and playback are already
+upright. Items indexed by an older server are re-probed once on the next scan
+(`probe.v` tracks this); their thumbnails are kept.
+
 ### Trickplay manifest
 
 ```json

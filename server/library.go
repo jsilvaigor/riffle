@@ -224,6 +224,12 @@ func (l *Library) Scan(ctx context.Context) {
 		seen[id] = true
 		old, ok := l.items[id]
 		if ok && old.Size == f.info.Size() && old.ModTime.Equal(f.info.ModTime()) {
+			// Same file, but indexed before the probe learned new fields: probe it again,
+			// keeping its thumbnails and everything else.
+			if old.Probe != nil && old.Probe.Version < probeVersion {
+				toProbe = append(toProbe, old)
+				continue
+			}
 			unchanged = append(unchanged, old)
 			continue
 		}
