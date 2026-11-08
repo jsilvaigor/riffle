@@ -1,27 +1,42 @@
 import UIKit
 
-/// Which orientations the app allows right now. The library is portrait on iPhone;
-/// the player follows the video and then the phone (player.md, Orientation).
+/// What the player allows (player.md, Orientation). The library's controller is
+/// always portrait on iPhone; the player's controller answers with `mask`, which
+/// follows the video on open, then the phone, unless rotation lock pins it.
 @MainActor
 enum Orientation {
     private static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
     static var libraryMask: UIInterfaceOrientationMask { isPad ? .all : .portrait }
-    private(set) static var mask: UIInterfaceOrientationMask = libraryMask
+    private static var playerMask: UIInterfaceOrientationMask { isPad ? .all : .allButUpsideDown }
 
-    /// Opens the player: allow every orientation, and on iPhone turn to landscape
-    /// once if the video is wide and the setting allows it.
-    static func enterPlayer(requestLandscape: Bool) {
-        mask = isPad ? .all : .allButUpsideDown
+    /// The player's allowed orientations.
+    private(set) static var mask: UIInterfaceOrientationMask = .allButUpsideDown
+
+    // While the player is still presenting, the library governs orientation and a
+    // request would be refused, so a landscape request waits until it's on screen.
+    private static var playerOnScreen = false
+    private static var pendingLandscape = false
+
+    static func preparePlayer() {
+        mask = playerMask
+        playerOnScreen = false
+        pendingLandscape = false
+    }
+
+    static func playerDidAppear() {
+        playerOnScreen = true
         apply()
-        if requestLandscape && !isPad {
-            // UIKit re-reads the app delegate's mask asynchronously after `apply()`;
-            // a request sent before that is checked against the old portrait mask.
-            Task {
-                try? await Task.sleep(for: .milliseconds(250))
-                request(.landscapeRight)
-            }
+        if pendingLandscape {
+            pendingLandscape = false
+            request(.landscapeRight)
         }
+    }
+
+    /// Wide videos turn to landscape once, on open, and only on iPhone.
+    static func enterPlayer(requestLandscape: Bool) {
+        guard requestLandscape && !isPad else { return }
+        if playerOnScreen { request(.landscapeRight) } else { pendingLandscape = true }
     }
 
     /// Rotation lock: pin whatever orientation the interface is in now.
@@ -37,22 +52,31 @@ enum Orientation {
     }
 
     static func unlock() {
-        mask = isPad ? .all : .allButUpsideDown
+        mask = playerMask
         apply()
     }
 
+    /// The library's controller takes over again on dismissal and turns back to
+    /// portrait by itself.
     static func exitPlayer() {
-        mask = libraryMask
-        apply()
-        if !isPad { request(.portrait) }
+        playerOnScreen = false
+        pendingLandscape = false
+        mask = playerMask
     }
 
-    /// Turns the interface without changing what's allowed afterwards.
-    static func request(_ orientations: UIInterfaceOrientationMask) {
+    /// Turns the interface without changing what's allowed afterwards. A refused
+    /// request (UIKit can lag a moment behind a mask change) is retried once.
+    static func request(_ orientations: UIInterfaceOrientationMask, retry: Bool = true) {
         scene?.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { error in
             #if DEBUG
             print("[orientation] request \(orientations.rawValue) failed: \(error.localizedDescription)")
             #endif
+            guard retry else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(300))
+                guard playerOnScreen, mask.contains(orientations) else { return }
+                request(orientations, retry: false)
+            }
         }
     }
 
@@ -62,32 +86,14 @@ enum Orientation {
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
     }
 
-    /// Asks every controller in the scene to re-read the allowed orientations (which
-    /// makes UIKit ask the app delegate again).
+    /// Asks the controllers to re-read their supported orientations.
     private static func apply() {
-        var updated = 0
         for window in scene?.windows ?? [] {
             var vc = window.rootViewController
             while let current = vc {
                 current.setNeedsUpdateOfSupportedInterfaceOrientations()
-                updated += 1
                 vc = current.presentedViewController
             }
-        }
-        #if DEBUG
-        print("[orientation] mask \(mask.rawValue) applied to \(updated) controllers")
-        #endif
-    }
-}
-
-final class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication,
-                     supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
-        MainActor.assumeIsolated {
-            #if DEBUG
-            print("[orientation] app delegate asked, mask \(Orientation.mask.rawValue)")
-            #endif
-            return Orientation.mask
         }
     }
 }

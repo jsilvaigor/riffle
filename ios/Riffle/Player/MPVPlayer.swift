@@ -85,7 +85,7 @@ final class MPVPlayer: @unchecked Sendable {
         ]
         for (k, v) in options { mpv_set_option_string(mpv, k, v) }
         #if DEBUG
-        mpv_request_log_messages(mpv, "v")
+        mpv_request_log_messages(mpv, "warn")
         #endif
 
         guard mpv_initialize(mpv) >= 0 else {
@@ -124,6 +124,21 @@ final class MPVPlayer: @unchecked Sendable {
     func setFill(_ fill: Bool) { set("panscan", fill ? "1.0" : "0.0") }
     func setAudioTrack(_ id: String) { set("aid", id) }
     func setSubtitleTrack(_ id: String) { set("sid", id) }
+
+    /// Tells mpv the layer changed size (rotation). MPVKit's MoltenVK context only
+    /// reads the drawable size when the video output reconfigures, which happens
+    /// only when the video parameters change. So set the aspect override to the
+    /// video's own aspect, nudged by 0.001% (alternating up and down so it never
+    /// drifts): a reconfigure with no visible change.
+    func layerDidResize() {
+        guard let mpv else { return }
+        var aspect = 0.0
+        guard mpv_get_property(mpv, "video-params/aspect", MPV_FORMAT_DOUBLE, &aspect) >= 0, aspect > 0 else { return }
+        aspectNudgeUp.toggle()
+        set("video-aspect-override", String(format: "%.8f", aspect * (aspectNudgeUp ? 1.00001 : 0.99999)))
+    }
+
+    private var aspectNudgeUp = false
 
     /// Stops decoding while the app is in the background (and back), so the Metal
     /// layer isn't drawn to off screen.

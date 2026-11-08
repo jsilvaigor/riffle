@@ -10,11 +10,32 @@ SwiftUI app for iPhone and iPad (iOS 18+) that streams from Riffle Server. UI fo
 - `Riffle/Model`: API client and wire types (`RiffleClient`, `Models`), app state
   (`AppModel`), trickplay sprite math, text formatting, folder tree, poster cache.
 - `Riffle/Components`: one SwiftUI view per `design/components/` guideline.
-- `Riffle/Views`: screens (Connect, Library, Folder, Detail, Search, Settings, Player).
+- `Riffle/Views`: screens (Connect, Library, Folder, Detail, Search, Settings).
+- `Riffle/Player`: the player (`design/player.md`). `MPVPlayer` wraps libmpv from
+  MPVKit (LGPL build, pinned to `1.1.0-n9.0.2`), rendering with `gpu-next` over
+  MoltenVK into a `CAMetalLayer`. `PlayerModel` holds playback state, scrubbing,
+  chrome and progress; `TrickplayStore` loads every trickplay sheet into memory
+  when the player opens; `GestureLayer` is the UIKit gesture surface.
 - `../design/RiffleTheme.swift` is compiled in directly (not copied), so the tokens
   stay in one place.
-- `Info.plist` holds only what build settings can't express: the launch screen and ATS
-  (plain HTTP to the NAS, including Tailscale MagicDNS names).
+- `Info.plist` holds only what build settings can't express: the scene manifest, the
+  launch screen and ATS (plain HTTP to the NAS, including Tailscale MagicDNS names).
+
+## Things that look odd but are deliberate
+
+- **UIKit app entry** (`App/RiffleApp.swift`): the app starts from a UIKit app and
+  scene delegate that host SwiftUI. SwiftUI's own root controller caches the allowed
+  orientations at launch, so the landscape request for wide videos failed
+  intermittently. The root controller is always portrait on iPhone; the player is
+  presented in `PlayerHostingController`, which answers for its own orientations.
+- **mpv waits for the layer**: the file loads only once the Metal layer is in a
+  window with a real size. Starting earlier could leave the video black.
+- **Rotation nudges mpv**: MPVKit's MoltenVK context reads the drawable size only
+  when the video output reconfigures, so after a rotation `MPVPlayer.layerDidResize`
+  sets `video-aspect-override` to the video's own aspect, nudged by 0.001%, to force
+  one. The view also sets `drawableSize` itself on every layout.
+- **The simulator decodes in software**: VideoToolbox isn't available there, so mpv
+  falls back to the CPU. Devices use hardware decoding.
 
 ## Run
 
@@ -31,6 +52,13 @@ passing the address as a launch argument (it lands in UserDefaults):
 xcrun simctl launch booted dev.isilva.riffle -server.address http://localhost:8770
 ```
 
+Two debug-only defaults help with simulator checks: `debug.autoplay <item id>` opens
+that video at launch, and `debug.keepChrome YES` stops the controls from hiding.
+
+```sh
+xcrun simctl spawn booted defaults write dev.isilva.riffle debug.autoplay <item id>
+```
+
 The address lives in UserDefaults (`server.address`), the token in the Keychain. The
 last library response is cached in Caches so the app opens instantly and offline.
 
@@ -38,6 +66,10 @@ last library response is cached in Caches so the app opens instantly and offline
 
 - [x] Connect, library browser (folders, Continue watching), detail with Resume and
   disk warm-up, search, settings, posters, unit tests for the server contract
-- [ ] Player: MPVKit render view, PlayerControls, Scrubber with trickplay prefetch,
-  orientation rules, gestures, progress reporting (`design/player.md`)
-- [ ] Track sheet, Picture in Picture, AirPlay remote mode
+- [x] Player: mpv playback, controls, scrubber with in-memory trickplay previews and
+  fine scrubbing, throttled keyframe seeks then an exact seek on release, gestures,
+  orientation following the video, buffering and error states, track sheet, resume
+  position every 10 s and on close
+- [ ] Check on a device: hardware decoding, gesture feel, the track sheet with real
+  audio and subtitle tracks
+- [ ] Picture in Picture, AirPlay remote mode, chapter haptics

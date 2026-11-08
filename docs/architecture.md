@@ -57,4 +57,6 @@ the top priority. Two parts:
 - [ ] Server: Bonjour advertisement, Unraid template XML
 - [x] Server: rotation and display size in item metadata, for player orientation
 - [x] iOS app: Xcode project, connect screen, library browser, detail, search, settings
-- [ ] iOS app: MPVKit player, custom scrub bar with trickplay, track sheet, PiP
+- [x] iOS app: MPVKit player, custom scrub bar with trickplay, gestures, orientation,
+  track sheet, progress reporting
+- [ ] iOS app: Picture in Picture, AirPlay remote mode; verify on a device

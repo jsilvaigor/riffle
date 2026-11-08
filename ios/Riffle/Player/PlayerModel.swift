@@ -77,6 +77,7 @@ final class PlayerModel {
     @ObservationIgnored private var player: MPVPlayer?
     @ObservationIgnored private let model: AppModel
     @ObservationIgnored private var hasStarted = false
+    @ObservationIgnored private var layerReady = false
     @ObservationIgnored private var orientationDecided = false
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
     @ObservationIgnored private var hideTask: Task<Void, Never>?
@@ -133,7 +134,6 @@ final class PlayerModel {
                             message: "Riffle couldn't set up video playback on this device.")
             return
         }
-        player.load(client.streamURL(request.item.id), start: request.start)
         beginBufferWatch(firstOpen: true)
 
         tasks.append(Task { [weak self] in
@@ -151,6 +151,17 @@ final class PlayerModel {
             }
         })
         observeAppState()
+    }
+
+    /// The video layer is on screen with its final size: start loading.
+    func videoLayerReady() {
+        guard !layerReady, let client = model.client else { return }
+        layerReady = true
+        player?.load(client.streamURL(request.item.id), start: request.start)
+    }
+
+    func videoLayerResized() {
+        player?.layerDidResize()
     }
 
     /// Called as the player closes: saves the position and releases mpv.
@@ -419,12 +430,7 @@ final class PlayerModel {
         guard !orientationDecided, let aspect = displayAspect else { return }
         orientationDecided = true
         let wantsLandscape = UserDefaults.standard.object(forKey: "player.landscapeForWide") as? Bool ?? true
-        // Wait a beat so the full-screen cover is in the hierarchy; a geometry request
-        // made while it's still presenting is checked against the library's portrait mask.
-        Task {
-            try? await Task.sleep(for: .milliseconds(50))
-            Orientation.enterPlayer(requestLandscape: wantsLandscape && aspect > 1.1)
-        }
+        Orientation.enterPlayer(requestLandscape: wantsLandscape && aspect > 1.1)
     }
 
     private func reportProgress(force: Bool = false) async {

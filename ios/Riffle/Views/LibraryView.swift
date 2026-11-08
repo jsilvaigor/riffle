@@ -4,6 +4,7 @@ import SwiftUI
 struct LibraryView: View {
     @Environment(AppModel.self) private var model
     @State private var playing: PlaybackRequest?
+    @State private var debugAutoplayed = false
 
     var body: some View {
         NavigationStack {
@@ -17,8 +18,10 @@ struct LibraryView: View {
         #if DEBUG
         // `defaults write dev.isilva.riffle debug.autoplay <item id>` opens it at launch.
         .task(id: model.library?.items.count) {
-            guard playing == nil, let id = UserDefaults.standard.string(forKey: "debug.autoplay"),
+            guard !debugAutoplayed, let id = UserDefaults.standard.string(forKey: "debug.autoplay"),
                   let item = model.item(id) else { return }
+            debugAutoplayed = true
+            try? await Task.sleep(for: .seconds(1))  // let the window finish appearing
             playing = PlaybackRequest(item: item, start: 0)
         }
         #endif
@@ -172,6 +175,20 @@ extension View {
     }
 
     func playerCover(_ request: Binding<PlaybackRequest?>) -> some View {
-        fullScreenCover(item: request) { PlayerView(request: $0) }
+        modifier(PlayerCover(request: request))
+    }
+}
+
+/// Hands a playback request to `PlayerPresenter`, then clears it.
+private struct PlayerCover: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var request: PlaybackRequest?
+
+    func body(content: Content) -> some View {
+        content.onChange(of: request) { _, new in
+            guard let new else { return }
+            PlayerPresenter.present(new, model: model)
+            request = nil
+        }
     }
 }

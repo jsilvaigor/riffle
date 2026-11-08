@@ -3,8 +3,9 @@ import SwiftUI
 /// The full-screen player (`design/player.md`).
 struct PlayerView: View {
     @Environment(AppModel.self) private var app
-    @Environment(\.dismiss) private var dismiss
     var request: PlaybackRequest
+    var onClose: () -> Void
+    var setOverlaysHidden: (Bool) -> Void
 
     @State private var player: PlayerModel?
 
@@ -13,6 +14,9 @@ struct PlayerView: View {
             Riffle.Palette.stage.ignoresSafeArea()
             if let player {
                 PlayerScreen(player: player, close: close)
+                    .onChange(of: player.chromeVisible, initial: true) { _, visible in
+                        setOverlaysHidden(!visible)
+                    }
             }
         }
         .onAppear {
@@ -27,7 +31,7 @@ struct PlayerView: View {
     private func close() {
         Task {
             await player?.stop()
-            dismiss()
+            onClose()
         }
     }
 }
@@ -43,7 +47,7 @@ private struct PlayerScreen: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                MPVVideoView(layer: player.layer)
+                MPVVideoView(layer: player.layer, onReady: player.videoLayerReady, onResize: player.videoLayerResized)
                     .ignoresSafeArea()
                 GestureLayer(handlers: handlers(width: geo.size.width), dismissEnabled: player.scrubTime == nil)
                     .ignoresSafeArea()
@@ -53,8 +57,6 @@ private struct PlayerScreen: View {
             .offset(y: reduceMotion ? 0 : dismissOffset)
             .opacity(reduceMotion ? 1 - min(dismissOffset / 400, 0.6) : 1)
         }
-        .statusBarHidden(!player.chromeVisible)
-        .persistentSystemOverlays(player.chromeVisible ? .automatic : .hidden)
         .sheet(isPresented: $player.sheetOpen) {
             TrackSheet(
                 probe: player.request.item.probe,

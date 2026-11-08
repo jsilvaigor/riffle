@@ -76,6 +76,9 @@ struct Scrubber: View {
             ? CGSize(width: 160, height: 160 / previewAspect)
             : CGSize(width: 160 * previewAspect, height: 160)
         let labelHeight: CGFloat = 24
+        let speedHeight: CGFloat = scrubLabel == nil ? 0 : 22
+        // Frame, time and optional speed label, stacked above the track with a gap.
+        let totalHeight = speedHeight + size.height + Riffle.Spacing.s1 + labelHeight
         let x = min(max(trackWidth * fraction - size.width / 2, -40), trackWidth - size.width + 40)
         VStack(spacing: Riffle.Spacing.s1) {
             if let label = scrubLabel {
@@ -83,6 +86,7 @@ struct Scrubber: View {
                     .font(Riffle.Typography.caption)
                     .foregroundStyle(Riffle.Palette.ink)
                     .fixedSize()
+                    .frame(height: speedHeight - Riffle.Spacing.s1)
             }
             ZStack {
                 Rectangle().fill(Riffle.Palette.stage)
@@ -105,10 +109,8 @@ struct Scrubber: View {
                 .frame(height: labelHeight)
                 .background(Riffle.Palette.scrim, in: .capsule)
         }
-        .frame(width: size.width)
-        .fixedSize()
-        .alignmentGuide(.top) { d in d.height + 4 }
-        .offset(x: x)
+        .frame(width: size.width, height: totalHeight)
+        .offset(x: x, y: -(totalHeight + Riffle.Spacing.s1))
         .allowsHitTesting(false)
     }
 
