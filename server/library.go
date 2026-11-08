@@ -128,8 +128,8 @@ func (l *Library) load() {
 			continue // root removed from config
 		}
 		it.abs = filepath.Join(rp, filepath.FromSlash(it.Path))
-		if it.Trickplay == TrickPending {
-			it.Trickplay = TrickNone // re-queued after startup scan
+		if it.Trickplay == TrickPending || it.Trickplay == TrickFailed {
+			it.Trickplay = TrickNone // re-queued after the startup scan; failures retry once per start
 		}
 		if it.Trickplay == TrickReady {
 			if _, err := os.Stat(filepath.Join(l.cfg.DataDir, "trickplay", it.ID, "manifest.json")); err != nil {

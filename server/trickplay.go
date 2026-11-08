@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image/jpeg"
 	"log"
@@ -35,7 +36,10 @@ const (
 	sheetRows = 10
 
 	vaapiDevice = "/dev/dri/renderD128"
-	recentJobs  = 20 // finished jobs kept for /api/diagnostics
+	// Clips shorter than this are decoded in full: it's cheap, and they often have a
+	// single keyframe, which gives keyframe-only decoding nothing to tile.
+	shortClipSec = 120
+	recentJobs   = 20 // finished jobs kept for /api/diagnostics
 )
 
 // trickQueue is a FIFO with "jump to front" for items a viewer is waiting on.
@@ -209,18 +213,31 @@ func (t *Trickplay) generate(ctx context.Context, id string) (string, error) {
 
 	dir := t.Dir(id)
 	tmp := dir + ".tmp"
-	os.RemoveAll(tmp)
-	if err := os.MkdirAll(tmp, 0o755); err != nil {
-		return "", err
-	}
 	defer os.RemoveAll(tmp)
+	// render fills tmp with sheets. errNoSheets means ffmpeg exited cleanly with no
+	// frames to tile (ffmpeg 5.x does this when keyframe-only decoding finds too few
+	// frames; newer versions exit with an error instead).
+	render := func(hw string, accurate bool) error {
+		os.RemoveAll(tmp)
+		if err := os.MkdirAll(tmp, 0o755); err != nil {
+			return err
+		}
+		if err := t.runFFmpeg(ctx, hw, abs, probe.Video.Index, interval, accurate, tmp); err != nil {
+			return err
+		}
+		if sheets, _ := filepath.Glob(filepath.Join(tmp, "*.jpg")); len(sheets) == 0 {
+			return errNoSheets
+		}
+		return nil
+	}
 
 	hw := t.cfg.HWAccel
 	if t.hwBroken.Load() {
 		hw = "none"
 	}
-	err := t.runFFmpeg(ctx, hw, abs, probe.Video.Index, interval, tmp)
-	if err != nil && hw != "none" {
+	accurate := t.cfg.Accurate || probe.Duration < shortClipSec
+	err := render(hw, accurate)
+	if err != nil && !errors.Is(err, errNoSheets) && hw != "none" {
 		if strings.Contains(err.Error(), "Device creation failed") {
 			t.hwBroken.Store(true)
 			log.Printf("trickplay: %s device unavailable, using CPU from now on "+
@@ -228,19 +245,19 @@ func (t *Trickplay) generate(ctx context.Context, id string) (string, error) {
 		} else {
 			log.Printf("trickplay %s: %s decode failed, retrying on CPU: %v", id, hw, err)
 		}
-		os.RemoveAll(tmp)
-		os.MkdirAll(tmp, 0o755)
 		hw = "none"
-		err = t.runFFmpeg(ctx, hw, abs, probe.Video.Index, interval, tmp)
+		err = render(hw, accurate)
+	}
+	if err != nil && !accurate && ctx.Err() == nil {
+		// Keyframe-only decoding found too few frames: decode every frame instead.
+		log.Printf("trickplay %s: keyframe-only pass failed, decoding all frames: %v", id, err)
+		err = render(hw, true)
 	}
 	if err != nil {
 		return hw, err
 	}
 
 	sheets, _ := filepath.Glob(filepath.Join(tmp, "*.jpg"))
-	if len(sheets) == 0 {
-		return hw, fmt.Errorf("ffmpeg produced no sheets")
-	}
 	f, err := os.Open(sheets[0])
 	if err != nil {
 		return hw, err
@@ -265,7 +282,10 @@ func (t *Trickplay) generate(ctx context.Context, id string) (string, error) {
 	return hw, os.Rename(tmp, dir)
 }
 
-func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, interval float64, outDir string) error {
+var errNoSheets = errors.New("ffmpeg produced no sheets")
+
+func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, interval float64,
+	accurate bool, outDir string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y"}
@@ -277,7 +297,7 @@ func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, i
 	}
 	// -skip_frame nokey decodes keyframes only: 10-50x less work than a full decode,
 	// at the cost of thumbnails snapping to the nearest keyframe (usually <2-5 s away).
-	if !t.cfg.Accurate {
+	if !accurate {
 		args = append(args, "-skip_frame", "nokey")
 	}
 	args = append(args,

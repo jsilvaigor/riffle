@@ -30,7 +30,9 @@ All settings are environment variables.
 
 By default thumbnails come from **keyframes only** (`-skip_frame nokey`). That's 10-50x
 faster than a full decode; each thumbnail snaps to the nearest keyframe, usually under
-2-5 s away. If hardware decoding fails because the device is missing, the server
+2-5 s away. Clips under 2 minutes are decoded in full (cheap, and they often have a single
+keyframe), and any keyframe-only pass that fails is retried with a full decode. Items that
+failed are retried once each time the server starts. If hardware decoding fails because the device is missing, the server
 switches to the CPU for the rest of the session.
 
 ## Running on Unraid
@@ -88,14 +90,15 @@ All endpoints except `/api/health` require the token, sent as `Authorization: Be
 |---|---|
 | `GET /api/health` | Server name, version, commit, whether auth is required |
 | `GET /api/diagnostics` | Build, ffmpeg/GPU environment and live decode tests (takes 1-3 s) |
-| `GET /api/library` | `{roots: [...], items: [...]}` with metadata and trickplay state |
+| `GET /api/library` | `{roots: [...], items: [...]}` with metadata and trickplay state. Gzipped when accepted; weak `ETag`, so a refresh with `If-None-Match` gets a 304 |
 | `POST /api/library/rescan` | Trigger a rescan (202) |
 | `GET /api/items/{id}` | One item |
 | `GET`/`HEAD /api/items/{id}/stream` | Original file, Range-enabled |
 | `POST /api/items/{id}/warm` | Spin up the disk ahead of playback (202) |
+| `GET /api/items/{id}/poster.jpg` | Still for the library screen: the trickplay tile 10% into the video (tile size, 320 px wide by default). 202 + `Retry-After` until trickplay is ready (doesn't jump the queue); 404 if unavailable |
 | `GET /api/items/{id}/trickplay/manifest.json` | 200 manifest; 202 + `Retry-After` while generating (jumps the queue); 404 if unavailable |
 | `GET /api/items/{id}/trickplay/{n}.jpg` | Sheet `n` (0-based) |
-| `GET /api/progress` | All resume positions |
+| `GET /api/progress` | All resume positions (gzip and `ETag` like the library) |
 | `PUT /api/items/{id}/progress` | `{"position": 123.4, "duration": 5400}` |
 
 ### Trickplay manifest
@@ -134,7 +137,7 @@ Everything runs through the `Makefile` in `server/` (`make help` lists the targe
 
 ```sh
 make test          # gofmt, vet, race build, unit tests
-make media         # test videos in testdata/media (h264 mkv, hevc mp4, wmv2 wmv)
+make media         # test videos in testdata/media (h264 mkv, hevc mp4, wmv2 wmv, 4 s portrait)
 make dev           # run natively on CPU against testdata/media, token "dev"
 make build run     # same in Docker (docker-compose.yml), then `make logs` / `make stop`
 make diag          # call /api/diagnostics on localhost (URL= and TOKEN= to point elsewhere)

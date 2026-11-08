@@ -1,11 +1,13 @@
 package main
 
 import (
+	"compress/gzip"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -73,5 +75,51 @@ func TestStreamRange(t *testing.T) {
 	}
 	if res, _ := get(t, srv.URL+"/api/items/nope/stream", nil); res.StatusCode != 404 {
 		t.Errorf("unknown item: got %d, want 404", res.StatusCode)
+	}
+}
+
+func TestLibraryGzipAndETag(t *testing.T) {
+	srv, _ := testServer(t, "")
+	res, body := get(t, srv.URL+"/api/library", map[string]string{"Accept-Encoding": "gzip"})
+	etag := res.Header.Get("ETag")
+	if res.StatusCode != 200 || etag == "" {
+		t.Fatalf("got %d, ETag %q", res.StatusCode, etag)
+	}
+	// One item is under the 1 KiB threshold, so the body is sent as-is.
+	if res.Header.Get("Content-Encoding") != "" || !strings.Contains(body, "clip.mp4") {
+		t.Errorf("small body: encoding %q, body %q", res.Header.Get("Content-Encoding"), body)
+	}
+	if res, _ := get(t, srv.URL+"/api/library", map[string]string{"If-None-Match": etag}); res.StatusCode != 304 {
+		t.Errorf("matching If-None-Match: got %d, want 304", res.StatusCode)
+	}
+	if res, _ := get(t, srv.URL+"/api/library", map[string]string{"If-None-Match": `W/"stale"`}); res.StatusCode != 200 {
+		t.Errorf("stale If-None-Match: got %d, want 200", res.StatusCode)
+	}
+}
+
+func TestWriteJSONCachedGzip(t *testing.T) {
+	big := map[string]string{"pad": strings.Repeat("riffle ", 1000)}
+	for _, c := range []struct {
+		accept string
+		gzip   bool
+	}{{"gzip, deflate, br", true}, {"br", false}, {"gzip;q=0", false}, {"", false}} {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Accept-Encoding", c.accept)
+		rec := httptest.NewRecorder()
+		writeJSONCached(rec, req, big)
+		got := rec.Header().Get("Content-Encoding") == "gzip"
+		if got != c.gzip {
+			t.Errorf("Accept-Encoding %q: gzip=%v, want %v", c.accept, got, c.gzip)
+		}
+		if got {
+			zr, err := gzip.NewReader(rec.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, _ := io.ReadAll(zr)
+			if !strings.Contains(string(b), "riffle riffle") {
+				t.Errorf("gzip body did not round-trip")
+			}
+		}
 	}
 }

@@ -150,7 +150,7 @@ func (s *Server) trickplayTest(ctx context.Context, sample string) DecodeTest {
 	}
 	defer os.RemoveAll(out)
 	start := time.Now()
-	err = s.trick.runFFmpeg(ctx, s.cfg.HWAccel, sample, 0, 1, out)
+	err = s.trick.runFFmpeg(ctx, s.cfg.HWAccel, sample, 0, 1, s.cfg.Accurate, out)
 	t.Millis = time.Since(start).Milliseconds()
 	if err == nil {
 		if sheets, _ := filepath.Glob(filepath.Join(out, "*.jpg")); len(sheets) == 0 {
