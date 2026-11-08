@@ -1,6 +1,6 @@
 # Riffle design system
 
-Usage rules for the Riffle iOS app. The tokens live in [`tokens.json`](tokens.json) and are mirrored for SwiftUI in [`RiffleTheme.swift`](RiffleTheme.swift); change both together. Component guidelines are in [`components/`](components/); logos, app icons, illustrations and patterns in [`assets/`](assets/). The editable version, with the visual cover and token views, is the Riffle design system artifact on claude.ai.
+Usage rules for the Riffle iOS app. The tokens live in [`tokens.json`](tokens.json) and are mirrored for SwiftUI in [`RiffleTheme.swift`](RiffleTheme.swift); change both together. Component guidelines are in [`components/`](components/), the player's behaviour (orientation, gestures, scrubbing) in [`player.md`](player.md); logos, app icons, illustrations and patterns in [`assets/`](assets/). The editable version, with the visual cover and token views, is the Riffle design system artifact on claude.ai.
 
 Riffle is a personal video player for iPhone and iPad that streams your own library from Riffle Server on your NAS. The video is the interface; everything Riffle draws is there to get out of its way, then come back the instant you reach for it. The system is dark-first, quiet, and spends its one accent, `citron`, on the thing you touch most: the scrubber.
 
@@ -85,6 +85,8 @@ SF Symbols can't ship outside Apple platforms, so the component previews draw si
 | play, pause | `play.fill`, `pause.fill` | Transport, Resume button |
 | back10, forward10 | `gobackward.10`, `goforward.10` | Transport |
 | close | `xmark` | Player |
+| replay | `arrow.counterclockwise` | Transport, after the video ends |
+| rotationLock | `lock.rotation` | Player |
 | tracks | `text.bubble` | Player: audio and subtitles |
 | pip | `pip.enter` | Player |
 | folder, film | `folder`, `film` | Library rows, empty thumbnails |
