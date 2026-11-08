@@ -1,6 +1,6 @@
 # Riffle design system
 
-Usage rules for the Riffle iOS app. The tokens live in [`tokens.json`](tokens.json) and are mirrored for SwiftUI in [`RiffleTheme.swift`](RiffleTheme.swift); change both together. Component guidelines are in [`components/`](components/). The editable version, with the visual cover and token views, is the Riffle design system artifact on claude.ai.
+Usage rules for the Riffle iOS app. The tokens live in [`tokens.json`](tokens.json) and are mirrored for SwiftUI in [`RiffleTheme.swift`](RiffleTheme.swift); change both together. Component guidelines are in [`components/`](components/); logos, app icons, illustrations and patterns in [`assets/`](assets/). The editable version, with the visual cover and token views, is the Riffle design system artifact on claude.ai.
 
 Riffle is a personal video player for iPhone and iPad that streams your own library from Riffle Server on your NAS. The video is the interface; everything Riffle draws is there to get out of its way, then come back the instant you reach for it. The system is dark-first, quiet, and spends its one accent, `citron`, on the thing you touch most: the scrubber.
 
@@ -100,4 +100,17 @@ Each control the app needs has a guideline in [`components/`](components/): Butt
 
 ## Logo
 
-Riffle has no logo yet. Until one exists, set the name in `sans` at weight 700 in `ink`, and never draw a stand-in mark.
+The mark is a play triangle sliced into five bands, with alternate bands slid back like riffled cards. The wordmark is lowercase and monoline; its i-dot is the `citron` scrubber thumb. Files and inks are in [`assets/Logos`](assets/Logos/README.md).
+
+- Use `riffle-mark` (`citron`) on dark grounds, `riffle-mark-dark` on `citron` or light grounds, and `riffle-mark-ink` when something else nearby is already `citron`.
+- Use the lockup where the name needs to read (About, the server's web page, docs) and the mark alone where space is tight or the name is already present (the app icon, the launch screen).
+- Clear space is half the mark's height. The mark is never smaller than 16 pt.
+- Never retype the wordmark, rotate the mark, or add outlines or shadows.
+
+## App icon and launch
+
+The app icon is the `surface` mark on a `citron` field. iOS's dark and tinted appearances have their own files. The launch screen is `surface` with the `citron` mark centred at about 115 pt and nothing else, so the first frame of the app matches it.
+
+## Illustrations and patterns
+
+Empty states (no videos, no server, offline, previews in progress) each get one flat illustration from [`assets/Illustrations`](assets/Illustrations/README.md), with a `title` line and a `body` message under it. The riffle tile is a texture for onboarding and marketing only; it never sits behind reading text or in the player.
