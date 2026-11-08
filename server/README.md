@@ -60,12 +60,17 @@ switches to the CPU for the rest of the session.
    stay fast even while array disks are spun down.
 4. Check the logs with `docker logs -f riffle-server`. If you see
    `cuda device unavailable, using CPU`, the NVIDIA runtime isn't reaching the container.
-5. Check hardware decoding from any machine: `make diag URL=http://tower:8770 TOKEN=change-me`
+5. Check hardware decoding from any machine: `make diag URL=http://tower:8770` (the token
+   comes from `TOKEN=`, `$RIFFLE_TOKEN` or `~/.config/riffle/token`)
    (or `curl -H "Authorization: Bearer change-me" http://tower:8770/api/diagnostics`).
    See [Diagnostics](#diagnostics) for how to read it.
 
 To use the Intel iGPU instead: set `RIFFLE_HWACCEL=vaapi`, add `--device /dev/dri`, and
 drop the `--runtime=nvidia` flags.
+
+The first scan of a large library runs ffprobe on every file, which takes a few minutes on
+spun-down disks. Items are queued for thumbnails as soon as each is probed, the index is
+saved every 15 s, and the log shows `scan: probed N/M`.
 
 ### Spun-down disks
 
@@ -117,7 +122,7 @@ and decodes it several ways:
 | `vaapi` | Same on the Intel iGPU; skipped without `--device /dev/dri` |
 | `trickplay:<hwaccel>` | The real trickplay command works with the configured `RIFFLE_HWACCEL` |
 
-It also reports `nvidia-smi` output (only present with `--runtime=nvidia`), the `/dev/dri`
+It also reports scan progress under `scan` (files found, probed so far), `nvidia-smi` output (only present with `--runtime=nvidia`), the `/dev/dri`
 nodes, `ffmpeg -hwaccels`, and under `trickplay` the decoder in use (`effectiveHWAccel`,
 `hwDisabled` once a device failure switched it to CPU) and the last 20 jobs with the
 decoder and time each took. On the RTX 3050 expect `cuda` and `trickplay:cuda` to pass

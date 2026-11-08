@@ -64,6 +64,7 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request) {
 			"hwaccel": s.cfg.HWAccel, "interval": s.cfg.Interval, "tileWidth": s.cfg.TileWidth,
 			"workers": s.cfg.Workers, "accurate": s.cfg.Accurate,
 		},
+		"scan":      s.lib.Status(),
 		"trickplay": s.trick.Status(),
 		"ffmpeg": map[string]any{
 			"version":  firstLine(run(ctx, "ffmpeg", "-hide_banner", "-version")),

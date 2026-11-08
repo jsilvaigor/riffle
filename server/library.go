@@ -52,6 +52,44 @@ type Library struct {
 	scanMu    sync.Mutex // one scan at a time
 	saveMu    sync.Mutex // serializes index writes
 	onNew     func(*Item)
+
+	statusMu sync.Mutex
+	status   ScanStatus
+}
+
+// ScanStatus is reported by /api/diagnostics.
+type ScanStatus struct {
+	Scanning   bool      `json:"scanning"`
+	Files      int       `json:"files"`   // video files found by the current or last scan
+	ToProbe    int       `json:"toProbe"` // new or changed files to probe
+	Probed     int       `json:"probed"`
+	StartedAt  time.Time `json:"startedAt,omitempty"`
+	FinishedAt time.Time `json:"finishedAt,omitempty"`
+}
+
+func (l *Library) Status() ScanStatus {
+	l.statusMu.Lock()
+	defer l.statusMu.Unlock()
+	return l.status
+}
+
+func (l *Library) setStatus(f func(*ScanStatus)) {
+	l.statusMu.Lock()
+	f(&l.status)
+	l.statusMu.Unlock()
+}
+
+// queueTrickplay hands an item to the trickplay queue if it has video and no sheets.
+func (l *Library) queueTrickplay(it *Item) {
+	if l.onNew == nil {
+		return
+	}
+	l.mu.RLock()
+	want := it.Trickplay == TrickNone && it.Probe != nil && it.Probe.Video != nil
+	l.mu.RUnlock()
+	if want {
+		l.onNew(it)
+	}
 }
 
 func itemID(root, rel string) string {
@@ -131,11 +169,18 @@ func writeFileAtomic(path string, b []byte) error {
 	return os.Rename(tmp, path)
 }
 
-// Scan walks every root, probes new or changed files and drops missing ones.
+// Scan walks every root, probes new or changed files and drops missing ones. Each
+// file is queued for trickplay as soon as it's probed, and the index is saved every
+// few seconds, so a first scan of a large library on spun-down disks shows progress
+// (and survives a restart) instead of committing everything at the end.
 func (l *Library) Scan(ctx context.Context) {
 	l.scanMu.Lock()
 	defer l.scanMu.Unlock()
 	start := time.Now()
+	l.setStatus(func(s *ScanStatus) {
+		*s = ScanStatus{Scanning: true, StartedAt: start.UTC(), FinishedAt: s.FinishedAt}
+	})
+	defer l.setStatus(func(s *ScanStatus) { s.Scanning = false; s.FinishedAt = time.Now().UTC() })
 
 	type found struct {
 		root, rel, abs string
@@ -172,13 +217,14 @@ func (l *Library) Scan(ctx context.Context) {
 	}
 
 	seen := make(map[string]bool, len(files))
-	var toProbe []*Item
+	var toProbe, unchanged []*Item
 	l.mu.Lock()
 	for _, f := range files {
 		id := itemID(f.root, f.rel)
 		seen[id] = true
 		old, ok := l.items[id]
 		if ok && old.Size == f.info.Size() && old.ModTime.Equal(f.info.ModTime()) {
+			unchanged = append(unchanged, old)
 			continue
 		}
 		it := &Item{ID: id, Root: f.root, Path: f.rel, Name: filepath.Base(f.abs),
@@ -198,10 +244,21 @@ func (l *Library) Scan(ctx context.Context) {
 	for _, id := range removed {
 		os.RemoveAll(filepath.Join(l.cfg.DataDir, "trickplay", id))
 	}
+	l.setStatus(func(s *ScanStatus) { s.Files, s.ToProbe = len(files), len(toProbe) })
+	if len(toProbe) > 0 {
+		log.Printf("scan: %d files, probing %d new/changed", len(files), len(toProbe))
+	}
+
+	// Already-probed items (e.g. after a restart) don't wait for the probes below.
+	for _, it := range unchanged {
+		l.queueTrickplay(it)
+	}
 
 	// ffprobe only reads container headers, so a few in parallel is fine even on HDDs.
 	sem := make(chan struct{}, 4)
 	var wg sync.WaitGroup
+	var progMu sync.Mutex
+	probed, lastSave := 0, time.Now()
 	for _, it := range toProbe {
 		if ctx.Err() != nil {
 			break
@@ -219,20 +276,26 @@ func (l *Library) Scan(ctx context.Context) {
 				it.Probe, it.ProbeErr = p, ""
 			}
 			l.mu.Unlock()
+			l.queueTrickplay(it)
+
+			progMu.Lock()
+			probed++
+			l.setStatus(func(s *ScanStatus) { s.Probed = probed })
+			save := time.Since(lastSave) >= 15*time.Second
+			if save {
+				lastSave = time.Now()
+				log.Printf("scan: probed %d/%d", probed, len(toProbe))
+			}
+			progMu.Unlock()
+			if save {
+				l.save()
+			}
 		}(it)
 	}
 	wg.Wait()
 	l.save()
 	log.Printf("scan: %d files, %d new/changed, %d removed in %s",
 		len(files), len(toProbe), len(removed), time.Since(start).Round(time.Millisecond))
-
-	if l.onNew != nil {
-		for _, it := range l.Snapshot() {
-			if it.Trickplay == TrickNone && it.Probe != nil && it.Probe.Video != nil {
-				l.onNew(l.Get(it.ID))
-			}
-		}
-	}
 }
 
 // Get returns the live item (callers must not mutate it without the lock).

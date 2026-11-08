@@ -6,9 +6,10 @@ IMAGE_NAME ?= registry.isilva.dev/riffle-server
 TAG_PREFIX := server-v
 # patch, minor or major: `make release BUMP=minor`
 BUMP ?= patch
-# Where `make diag` points: `make diag URL=http://tower:8770 TOKEN=...`
+# Where `make diag` points: `make diag URL=http://192.168.100.13:8770`. The token comes
+# from TOKEN=, $RIFFLE_TOKEN, ~/.config/riffle/token, or "dev" for local runs.
 URL ?= http://localhost:8770
-TOKEN ?= $(or $(RIFFLE_TOKEN),dev)
+TOKEN ?= $(or $(RIFFLE_TOKEN),$(shell cat ~/.config/riffle/token 2>/dev/null),dev)
 
 help:
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-9s %s\n", $$1, $$2}'

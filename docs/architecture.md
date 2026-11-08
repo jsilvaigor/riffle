@@ -44,7 +44,8 @@ the top priority. Two parts:
   items being watched), progress, token auth, Dockerfile, Unraid instructions
 - [x] Server: Makefile, docker-compose for local runs, versioned releases to
   `registry.isilva.dev/riffle-server`, basic Go tests, `/api/diagnostics`
-- [ ] Server: verify `-hwaccel cuda` on the real RTX 3050 inside the container
-  (deploy a release, then check `/api/diagnostics`)
+- [x] Server: `-hwaccel cuda` verified on the RTX 3050 inside the container (driver
+  615.78.08, ~0.5 s per 720p trickplay job); VAAPI on the UHD 630 works too
+- [x] Server: first scan queues trickplay per probed file and saves the index as it goes
 - [ ] Server: Bonjour advertisement, Unraid template XML
 - [ ] iOS app: project setup with MPVKit, library browser, player, custom scrub bar
