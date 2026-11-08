@@ -1,4 +1,9 @@
-# Riffle
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/assets/Logos/riffle-lockup.svg">
+    <img alt="Riffle" src="design/assets/Logos/riffle-lockup-dark.svg" height="64">
+  </picture>
+</h1>
 
 A local-network-first iOS video player, built for fast scrubbing over a home NAS.
 
