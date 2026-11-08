@@ -34,21 +34,39 @@ var adminTmpl = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return n * 100 / total
 	},
+	"timecode": timecode,
+	"mbps":     func(bps int64) string { return fmt.Sprintf("%.1f Mb/s", float64(bps)/1e6) },
 	"ms": func(ms int64) string {
 		return (time.Duration(ms) * time.Millisecond).Round(10 * time.Millisecond).String()
 	},
-}).ParseFS(adminFS, "admin/*.html"))
+}).ParseFS(adminFS, "admin/fragments*.html"))
 
 func (s *Server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /admin", http.RedirectHandler("/admin/", http.StatusMovedPermanently))
-	mux.HandleFunc("GET /admin/{$}", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-cache")
-		http.ServeFileFS(w, r, adminFS, "admin/index.html")
+	page := func(file string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-cache")
+			http.ServeFileFS(w, r, adminFS, "admin/"+file)
+		}
+	}
+	mux.HandleFunc("GET /admin/{$}", page("index.html"))
+	mux.HandleFunc("GET /admin/library", page("library.html"))
+	// Shared assets. no-cache (revalidated by modification time) so a server update is
+	// picked up straight away; htmx itself never changes between releases.
+	mux.HandleFunc("GET /admin/assets/{file}", func(w http.ResponseWriter, r *http.Request) {
+		file := r.PathValue("file")
+		switch file {
+		case "htmx.min.js":
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+		case "admin.css", "admin.js", "library.js":
+			w.Header().Set("Cache-Control", "no-cache")
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFileFS(w, r, adminFS, "admin/"+file)
 	})
-	mux.HandleFunc("GET /admin/htmx.min.js", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=86400")
-		http.ServeFileFS(w, r, adminFS, "admin/htmx.min.js")
-	})
+	mux.HandleFunc("GET /admin/f/item/{id}", s.auth(s.adminItem))
 	mux.HandleFunc("GET /admin/f/{name}", s.auth(s.adminFragment))
 	mux.HandleFunc("POST /admin/a/{action}", s.auth(s.adminAction))
 	mux.HandleFunc("POST /admin/a/items/{id}/{action}", s.auth(s.adminItemAction))
@@ -69,6 +87,10 @@ func (s *Server) adminFragment(w http.ResponseWriter, r *http.Request) {
 		data = s.adminProblems()
 	case "diagnostics":
 		data = s.runDiagnostics(r.Context())
+	case "libfilters":
+		data = s.adminLibFilters()
+	case "browse":
+		data = s.adminBrowse(r)
 	default:
 		http.NotFound(w, r)
 		return

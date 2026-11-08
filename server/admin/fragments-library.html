@@ -1,0 +1,131 @@
+{{define "libfilters"}}
+<form id="filters" class="filters" role="search"
+      hx-get="/admin/f/browse" hx-target="#results" hx-sync="this:replace"
+      hx-trigger="load, change, input delay:300ms">
+  <input type="search" name="q" placeholder="Search names and folders" aria-label="Search" autocomplete="off">
+  <select name="folder" aria-label="Folder">
+    <option value="">All folders</option>
+    {{range .Folders}}<option value="{{.Value}}">{{.Label}} ({{.Count}})</option>{{end}}
+  </select>
+  <select name="state" aria-label="Show">
+    <option value="">All videos</option>
+    <option value="ready">Thumbnails ready</option>
+    <option value="pending">Thumbnails pending</option>
+    <option value="failed">Thumbnails failed</option>
+    <option value="probe-error">Unreadable metadata</option>
+    <option value="portrait">Portrait</option>
+    <option value="watched">Started watching</option>
+  </select>
+  <select name="sort" aria-label="Sort by">
+    <option value="">Name</option>
+    <option value="recent">Recently changed</option>
+    <option value="size">Largest</option>
+    <option value="duration">Longest</option>
+  </select>
+</form>
+{{end}}
+
+{{define "browse"}}
+{{if .First}}
+  <p class="count">{{.Total}} video{{if ne .Total 1}}s{{end}}</p>
+  {{if .Cards}}<ul class="grid">{{template "cards" .}}</ul>
+  {{else}}<p class="placeholder">No videos match.</p>{{end}}
+{{else}}
+  {{template "cards" .}}
+{{end}}
+{{end}}
+
+{{define "cards"}}
+{{range .Cards}}
+<li>
+  <button class="tile" type="button" hx-get="/admin/f/item/{{.ID}}" hx-target="#item"
+          aria-label="{{.Name}}">
+    <div class="thumb">
+      <img data-src="/api/items/{{.ID}}/poster.jpg" alt="" loading="lazy" class="missing">
+      <span class="note">{{if .ProbeErr}}Can't read this file{{else if eq .Trickplay "failed"}}No preview{{else if eq .Trickplay "ready"}}Loading…{{else}}Preview not ready{{end}}</span>
+      {{if .Duration}}<span class="dur">{{timecode .Duration}}</span>{{end}}
+      {{if .Watched}}<span class="watched" style="width: {{.Watched}}%"></span>{{end}}
+    </div>
+    <div class="meta">
+      <span class="title">{{.Name}}</span>
+      <span class="sub">{{.Folder}}</span>
+      <span class="sub">{{if .Res}}{{.Res}} · {{.Codec}} · {{end}}{{bytes .Size}}</span>
+    </div>
+  </button>
+</li>
+{{end}}
+{{if .More}}
+<li class="more">
+  <button hx-get="/admin/f/browse" hx-include="#filters" hx-vals='{"offset": {{.Next}}}'
+          hx-target="closest li" hx-swap="outerHTML">Show more ({{.Remaining}} left)</button>
+</li>
+{{end}}
+{{end}}
+
+{{define "item"}}
+{{$it := .Item}}
+<div class="item-head">
+  <div>
+    <h2>{{$it.Name}}</h2>
+    <div class="muted mono">{{$it.Root}}/{{$it.Path}}</div>
+  </div>
+  <button class="link" type="button" onclick="this.closest('dialog').close()" aria-label="Close">Close</button>
+</div>
+<div class="item-body">
+  <div>
+    {{with .Manifest}}
+      <div class="scrub" data-id="{{$it.ID}}" data-interval="{{.Interval}}" data-cols="{{.Columns}}"
+           data-rows="{{.Rows}}" data-tw="{{.TileWidth}}" data-th="{{.TileHeight}}"
+           data-count="{{.Count}}" data-sheets="{{.Sheets}}">
+        <div class="frame" role="img" aria-label="Preview frame"></div>
+        <div class="time"><span class="t">0:00</span> <span class="muted">/ {{timecode $.Item.Probe.Duration}}</span></div>
+        <input type="range" min="0" max="{{.Count}}" value="0" step="1" aria-label="Preview position">
+        <p class="muted" style="margin:0">Move over the frame or drag the slider. These are the
+          scrub previews the app shows, {{.Count}} frames, one every {{.Interval}} s.</p>
+      </div>
+      <details class="sheets" style="margin-top:16px">
+        <summary>Thumbnail sheets ({{.Sheets}})</summary>
+        {{range $.Sheets}}<img data-src="/api/items/{{$it.ID}}/trickplay/{{.}}.jpg" alt="Sheet {{.}}" loading="lazy">{{end}}
+      </details>
+    {{else}}
+      <div class="thumb" style="border-radius:8px">
+        <span class="note">{{if $it.ProbeErr}}Can't read this file.{{else if eq $it.Trickplay "failed"}}Thumbnails failed for this video.{{else}}Previews aren't ready yet. They'll show here once this video's thumbnails are made.{{end}}</span>
+      </div>
+    {{end}}
+  </div>
+
+  <div>
+    <dl>
+      <dt>Size</dt><dd>{{bytes $it.Size}}</dd>
+      <dt>Changed</dt><dd>{{$it.ModTime.Format "2 Jan 2006 15:04"}}</dd>
+      {{with $it.Probe}}
+        <dt>Duration</dt><dd>{{timecode .Duration}}</dd>
+        <dt>Container</dt><dd>{{.Container}}</dd>
+        {{if .Bitrate}}<dt>Bitrate</dt><dd>{{mbps .Bitrate}}</dd>{{end}}
+        {{with .Video}}
+          <dt>Video</dt><dd>{{.Codec}}{{with .Profile}} {{.}}{{end}}</dd>
+          <dt>Stored size</dt><dd>{{.Width}}×{{.Height}}</dd>
+          <dt>Shown as</dt><dd>{{$.DisplayW}}×{{$.DisplayH}}{{if .Rotation}} <span class="muted">(rotated {{.Rotation}}°)</span>{{end}}</dd>
+          <dt>Frame rate</dt><dd>{{printf "%.3g" .FrameRate}} fps</dd>
+          {{with .PixFmt}}<dt>Pixel format</dt><dd>{{.}}</dd>{{end}}
+        {{end}}
+      {{end}}
+      <dt>Thumbnails</dt>
+      <dd>{{if eq $it.Trickplay "failed"}}<span class="alert">Failed</span>{{else if eq $it.Trickplay "none"}}pending{{else}}{{$it.Trickplay}}{{end}}</dd>
+      {{with .Progress}}<dt>Watched to</dt><dd>{{timecode .Position}} <span class="muted">{{ago .UpdatedAt}}</span></dd>{{end}}
+    </dl>
+    {{with $it.Probe}}
+      {{if .Audio}}<h2 style="margin-top:16px">Audio</h2>
+        <ul class="tracks">{{range .Audio}}<li>{{.Codec}}, {{.Channels}} ch{{with .Language}}, {{.}}{{end}}{{with .Title}} <span class="muted">{{.}}</span>{{end}}{{if .Default}} <span class="badge">default</span>{{end}}</li>{{end}}</ul>{{end}}
+      {{if .Subtitles}}<h2 style="margin-top:16px">Subtitles</h2>
+        <ul class="tracks">{{range .Subtitles}}<li>{{.Codec}}{{with .Language}}, {{.}}{{end}}{{with .Title}} <span class="muted">{{.}}</span>{{end}}{{if .Forced}} <span class="badge">forced</span>{{end}}</li>{{end}}</ul>{{end}}
+    {{end}}
+    {{with $it.ProbeErr}}<p class="err-text mono">{{.}}</p>{{end}}
+    {{with $it.TrickErr}}<p class="err-text mono">{{.}}</p>{{end}}
+    <div class="actions">
+      <button hx-post="/admin/a/items/{{$it.ID}}/thumbnails" hx-target="#toast" hx-disabled-elt="this">Rebuild thumbnails</button>
+      <button hx-post="/admin/a/items/{{$it.ID}}/reprobe" hx-target="#toast" hx-disabled-elt="this">Re-probe</button>
+    </div>
+  </div>
+</div>
+{{end}}

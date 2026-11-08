@@ -155,6 +155,16 @@ breakdown every minute) and shows:
   resolution and orientation
 - **Hardware tests:** the `/api/diagnostics` decode tests, run on demand
 
+The **Library** page (`/admin/library`) browses the library without playing anything: a
+grid of posters (60 at a time, "Show more" for the rest) with search, a folder filter
+(subfolders included), filters for thumbnail state, unreadable metadata, portrait videos
+and started videos, and sorting by name, recently changed, size or duration. Clicking a
+video opens its details: a hover-scrub preview built from the trickplay sheets (the same
+frames the app shows while scrubbing), the sheets themselves, metadata (codec, stored and
+displayed size, rotation, audio and subtitle tracks), the resume position, and **Rebuild
+thumbnails** / **Re-probe**. Details are linkable as `/admin/library#item=<id>`. Images
+load through the API with the token as `?token=`, since `<img>` can't send headers.
+
 ### Diagnostics
 
 `GET /api/diagnostics` answers "is the GPU actually doing the work?" without shell access
