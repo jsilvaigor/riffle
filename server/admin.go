@@ -104,8 +104,8 @@ func (s *Server) adminFragment(w http.ResponseWriter, r *http.Request) {
 		data = s.adminProblems()
 	case "diagnostics":
 		data = s.runDiagnostics(r.Context())
-	case "libfilters":
-		data = s.adminLibFilters()
+	case "tree":
+		data = s.adminTree()
 	case "browse":
 		data = s.adminBrowse(r)
 	default:

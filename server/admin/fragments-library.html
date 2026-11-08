@@ -1,45 +1,57 @@
-{{define "libfilters"}}
-<form id="filters" class="filters" role="search"
-      hx-get="/admin/f/browse" hx-target="#results" hx-sync="this:replace"
-      hx-trigger="load, change, input delay:300ms">
-  <label class="search">{{icon "search"}}<input type="search" name="q" placeholder="Search names and folders" aria-label="Search" autocomplete="off"></label>
-  <select name="folder" aria-label="Folder">
-    <option value="">All folders</option>
-    {{range .Folders}}<option value="{{.Value}}">{{.Label}} ({{.Count}})</option>{{end}}
-  </select>
-  <select name="state" aria-label="Show">
-    <option value="">All videos</option>
-    <option value="ready">Thumbnails ready</option>
-    <option value="pending">Thumbnails pending</option>
-    <option value="failed">Thumbnails failed</option>
-    <option value="probe-error">Unreadable metadata</option>
-    <option value="portrait">Portrait</option>
-    <option value="watched">Started watching</option>
-  </select>
-  <select name="sort" aria-label="Sort by">
-    <option value="">Name</option>
-    <option value="recent">Recently changed</option>
-    <option value="size">Largest</option>
-    <option value="duration">Longest</option>
-  </select>
-</form>
+{{define "tree"}}
+<ul class="tree-root" role="tree" aria-label="Folders">
+  {{range .Roots}}{{template "treenode" .}}{{end}}
+</ul>
+{{end}}
+
+{{define "treenode"}}
+<li role="treeitem" data-path="{{.Path}}"{{if .Children}} aria-expanded="false"{{end}}>
+  <div class="node">
+    {{if .Children}}<button type="button" class="twisty" tabindex="-1" aria-label="Show or hide {{.Name}}">{{icon "chevron"}}</button>{{else}}<span class="twisty"></span>{{end}}
+    <a href="#" data-folder="{{.Path}}">{{icon "folder"}}<span class="name">{{.Name}}</span><span class="count">{{.Count}}</span></a>
+  </div>
+  {{if .Children}}<ul role="group">{{range .Children}}{{template "treenode" .}}{{end}}</ul>{{end}}
+</li>
 {{end}}
 
 {{define "browse"}}
 {{if .First}}
-  <p class="count">{{.Total}} video{{if ne .Total 1}}s{{end}}</p>
-  {{if .Cards}}<ul class="grid">{{template "cards" .}}</ul>
-  {{else if .Filtered}}
-    <div class="empty">
-      <img src="/admin/assets/empty-library.svg" alt="" width="160" height="107">
-      <h3>No videos match</h3>
-      <p>Try another search, folder or filter.</p>
-    </div>
-  {{else}}
+  <div class="browse-head" data-folder="{{.Folder}}">
+    <nav class="crumbs" aria-label="Folder path">
+      {{- range $i, $c := .Crumbs}}{{if $i}}{{icon "chevron"}}{{end}}<a href="#" data-folder="{{$c.Path}}">{{$c.Name}}</a>{{end -}}
+      {{if not .Crumbs}}<span>All media folders</span>{{end}}
+    </nav>
+    <p class="count">
+      {{- if .Searching}}{{.Total}} match{{if ne .Total 1}}es{{end}} in this folder and its subfolders
+      {{- else}}{{with len .Subfolders}}{{.}} folder{{if ne . 1}}s{{end}} · {{end}}{{.Total}} video{{if ne .Total 1}}s{{end}}{{end -}}
+    </p>
+  </div>
+  {{if or .Subfolders .Cards}}
+    <ul class="grid">
+      {{range .Subfolders}}
+      <li>
+        <a class="tile folder-tile" href="#" data-folder="{{.Path}}">
+          <div class="thumb">{{icon "folder"}}</div>
+          <div class="meta">
+            <span class="title">{{.Name}}</span>
+            <span class="sub">{{.Count}} video{{if ne .Count 1}}s{{end}}{{with len .Children}} · {{.}} folder{{if ne . 1}}s{{end}}{{end}}</span>
+          </div>
+        </a>
+      </li>
+      {{end}}
+      {{template "cards" .}}
+    </ul>
+  {{else if .LibraryEmpty}}
     <div class="empty">
       <img src="/admin/assets/empty-library.svg" alt="" width="160" height="107">
       <h3>No videos yet</h3>
       <p>Add folders to RIFFLE_MEDIA on the server, then rescan.</p>
+    </div>
+  {{else}}
+    <div class="empty">
+      <img src="/admin/assets/empty-library.svg" alt="" width="160" height="107">
+      <h3>No videos match</h3>
+      <p>Try another search or filter, or a different folder.</p>
     </div>
   {{end}}
 {{else}}
@@ -60,7 +72,7 @@
     </div>
     <div class="meta">
       <span class="title">{{.Name}}</span>
-      <span class="sub">{{icon "folder"}} {{.Folder}}</span>
+      {{with .Folder}}<span class="sub where" title="{{.}}">{{icon "folder"}}<span class="path"><bdi>{{.}}</bdi></span></span>{{end}}
       <span class="sub">{{if .Res}}{{.Res}} · {{.Codec}} · {{end}}{{bytes .Size}}</span>
     </div>
   </button>

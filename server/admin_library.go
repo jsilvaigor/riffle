@@ -12,7 +12,8 @@ import (
 	"strings"
 )
 
-// The library page of the admin dashboard: a filterable grid of posters, and an item
+// The library page of the admin dashboard: a file-explorer view (folder tree, then the
+// selected folder's subfolders and videos as a poster grid), and an item
 // view with metadata and a hover-scrub preview built from the trickplay sheets. Images
 // come from the regular API (poster.jpg, trickplay/N.jpg); the page adds the token as
 // ?token= because <img> can't send headers.
@@ -28,11 +29,6 @@ type libCard struct {
 	Watched                                           int // percent, 0 if never played
 }
 
-type folderOpt struct {
-	Value, Label string
-	Count        int
-}
-
 // folderOf is "Root" or "Root/dir/sub" for an item.
 func folderOf(it Item) string {
 	if dir := path.Dir(it.Path); dir != "." {
@@ -41,25 +37,85 @@ func folderOf(it Item) string {
 	return it.Root
 }
 
-func (s *Server) adminLibFilters() map[string]any {
-	counts := map[string]int{}
-	for _, it := range s.lib.Snapshot() {
-		counts[folderOf(it)]++
-	}
-	folders := make([]folderOpt, 0, len(counts))
-	for f, n := range counts {
-		folders = append(folders, folderOpt{Value: f, Label: f, Count: n})
-	}
-	sort.Slice(folders, func(i, j int) bool { return folders[i].Value < folders[j].Value })
-	return map[string]any{"Folders": folders}
+// folderNode is one folder in the explorer tree. Folders exist only where videos are.
+type folderNode struct {
+	Name, Path string
+	Count      int // videos here and below
+	Direct     int // videos directly here
+	Children   []*folderNode
 }
+
+// libraryTree builds the folder tree, one top-level node per media root (in config
+// order), and an index by path.
+func (s *Server) libraryTree(items []Item) ([]*folderNode, map[string]*folderNode) {
+	index := map[string]*folderNode{}
+	var roots []*folderNode
+	for _, r := range s.cfg.Roots {
+		n := &folderNode{Name: r.Name, Path: r.Name}
+		index[r.Name] = n
+		roots = append(roots, n)
+	}
+	var node func(p string) *folderNode
+	node = func(p string) *folderNode {
+		if n, ok := index[p]; ok {
+			return n
+		}
+		parent, name := path.Split(p)
+		n := &folderNode{Name: name, Path: p}
+		index[p] = n
+		if parent == "" { // a top-level folder that isn't a configured root
+			roots = append(roots, n)
+			return n
+		}
+		par := node(strings.TrimSuffix(parent, "/"))
+		par.Children = append(par.Children, n)
+		return n
+	}
+	for _, it := range items {
+		n := node(folderOf(it))
+		n.Direct++
+		for p := n.Path; ; {
+			index[p].Count++
+			i := strings.LastIndex(p, "/")
+			if i < 0 {
+				break
+			}
+			p = p[:i]
+		}
+	}
+	for _, n := range index {
+		sort.Slice(n.Children, func(i, j int) bool {
+			return strings.ToLower(n.Children[i].Name) < strings.ToLower(n.Children[j].Name)
+		})
+	}
+	return roots, index
+}
+
+func (s *Server) adminTree() map[string]any {
+	roots, _ := s.libraryTree(s.lib.Snapshot())
+	return map[string]any{"Roots": roots}
+}
+
+type crumb struct{ Name, Path string }
 
 func (s *Server) adminBrowse(r *http.Request) map[string]any {
 	q := strings.ToLower(strings.TrimSpace(r.FormValue("q")))
-	folder := r.FormValue("folder")
+	folder := strings.Trim(r.FormValue("folder"), "/")
 	state := r.FormValue("state")
 	sortBy := r.FormValue("sort")
 	offset, _ := strconv.Atoi(r.FormValue("offset"))
+	// Browsing shows a folder's own videos and its subfolders; searching or filtering
+	// looks through the folder and everything below it.
+	searching := q != "" || state != ""
+
+	items := s.lib.Snapshot()
+	roots, index := s.libraryTree(items)
+	if folder == "" && len(roots) == 1 {
+		folder = roots[0].Path // one media root: start inside it
+	}
+	if _, ok := index[folder]; !ok {
+		folder = "" // unknown or removed folder: back to the top
+	}
 
 	s.progMu.Lock()
 	progress := make(map[string]Progress, len(s.progress))
@@ -69,12 +125,16 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 	s.progMu.Unlock()
 
 	var matches []Item
-	for _, it := range s.lib.Snapshot() {
+	for _, it := range items {
 		if q != "" && !strings.Contains(strings.ToLower(it.Path), q) {
 			continue
 		}
-		// A folder includes its subfolders.
-		if f := folderOf(it); folder != "" && f != folder && !strings.HasPrefix(f, folder+"/") {
+		f := folderOf(it)
+		if searching {
+			if folder != "" && f != folder && !strings.HasPrefix(f, folder+"/") {
+				continue
+			}
+		} else if f != folder {
 			continue
 		}
 		v := (*VideoStream)(nil)
@@ -126,8 +186,13 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 	page := matches[offset:min(total, offset+browsePage)]
 	cards := make([]libCard, len(page))
 	for i, it := range page {
-		c := libCard{ID: it.ID, Name: it.Name, Folder: folderOf(it), Size: it.Size,
-			Trickplay: it.Trickplay, ProbeErr: it.ProbeErr}
+		c := libCard{ID: it.ID, Name: it.Name, Size: it.Size, Trickplay: it.Trickplay, ProbeErr: it.ProbeErr}
+		if searching {
+			// Results come from subfolders too: say where, relative to this folder.
+			if f := folderOf(it); f != folder {
+				c.Folder = strings.TrimPrefix(f, folder+"/")
+			}
+		}
 		if it.Probe != nil {
 			c.Duration = it.Probe.Duration
 			if v := it.Probe.Video; v != nil {
@@ -140,11 +205,27 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 		}
 		cards[i] = c
 	}
+	var subfolders []*folderNode
+	if !searching {
+		if folder == "" {
+			subfolders = roots
+		} else {
+			subfolders = index[folder].Children
+		}
+	}
+	var crumbs []crumb
+	if folder != "" {
+		parts := strings.Split(folder, "/")
+		for i := range parts {
+			crumbs = append(crumbs, crumb{parts[i], strings.Join(parts[:i+1], "/")})
+		}
+	}
 	next := offset + len(page)
 	return map[string]any{
 		"Cards": cards, "Total": total, "First": offset == 0,
-		"Filtered": q != "" || folder != "" || state != "",
-		"Next":     next, "More": next < total, "Remaining": total - next,
+		"Folder": folder, "Crumbs": crumbs, "Subfolders": subfolders,
+		"Searching": searching, "LibraryEmpty": len(items) == 0,
+		"Next": next, "More": next < total, "Remaining": total - next,
 	}
 }
 
