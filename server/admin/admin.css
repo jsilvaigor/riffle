@@ -94,7 +94,9 @@ header nav a[aria-current="page"] { color: var(--ink); background: var(--surface
   place-items: center; overflow: hidden; }
 /* Absolutely positioned so portrait posters letterbox inside the 16:9 box. */
 .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
-.thumb img.missing { display: none; }
+/* Hidden with opacity, not display: none: a lazy image that isn't rendered is never
+   fetched, so it would never load and stay hidden. The note shows through meanwhile. */
+.thumb img.missing { opacity: 0; }
 .thumb .note { position: absolute; color: var(--ink-muted); font-size: 13px; padding: 0 12px;
   text-align: center; }
 .thumb img:not(.missing) + .note { display: none; }
