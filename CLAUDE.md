@@ -9,7 +9,8 @@ performance is the top priority.** Read `docs/architecture.md` for decisions and
   Runs in Docker on Unraid. API documented in `server/README.md`.
 - `ios/`: Riffle iOS app (not started yet). Plan: SwiftUI + MPVKit (libmpv).
 - `design/`: design system. `tokens.json` is the source; `RiffleTheme.swift` mirrors it
-  for SwiftUI (change both together); `README.md` has the usage rules the app follows.
+  for SwiftUI (change both together); `README.md` has the usage rules the app follows;
+  `components/` has a guideline per app control. Build iOS UI from these.
 - `docs/`: architecture and decisions.
 
 ## Server conventions
