@@ -2,8 +2,11 @@
 /server/riffle-server
 *.test
 
-# Local data from manual runs
+# Local data from manual runs (make media / dev / backup)
 /data/
+/server/data/
+/server/testdata/
+/server/backups/
 
 # Xcode
 xcuserdata/

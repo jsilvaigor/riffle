@@ -53,6 +53,7 @@ func NewServer(cfg Config, lib *Library, trick *Trickplay) *Server {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
+	mux.HandleFunc("GET /api/diagnostics", s.auth(s.diagnostics))
 	mux.HandleFunc("GET /api/library", s.auth(s.library))
 	mux.HandleFunc("POST /api/library/rescan", s.auth(s.rescan))
 	mux.HandleFunc("GET /api/items/{id}", s.auth(s.item))
@@ -111,7 +112,7 @@ func (s *Server) lookup(w http.ResponseWriter, r *http.Request) (*Item, string, 
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"name": "riffle-server", "version": version, "authRequired": s.cfg.Token != "",
+		"name": "riffle-server", "version": version, "commit": commit, "authRequired": s.cfg.Token != "",
 	})
 }
 

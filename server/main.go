@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-const version = "0.1.0"
-
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("riffle ")
@@ -27,6 +25,7 @@ func main() {
 	for _, r := range cfg.Roots {
 		log.Printf("media root %q -> %s", r.Name, r.Path)
 	}
+	log.Printf("riffle-server %s (%s)", version, commit)
 	log.Printf("data dir %s, trickplay hwaccel=%s interval=%gs width=%dpx workers=%d accurate=%v",
 		cfg.DataDir, cfg.HWAccel, cfg.Interval, cfg.TileWidth, cfg.Workers, cfg.Accurate)
 	if cfg.Token == "" {
