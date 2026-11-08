@@ -8,6 +8,8 @@ performance is the top priority.** Read `docs/architecture.md` for decisions and
 - `server/`: Riffle Server (Go 1.24, standard library only, shells out to ffmpeg/ffprobe).
   Runs in Docker on Unraid. API documented in `server/README.md`.
 - `ios/`: Riffle iOS app (not started yet). Plan: SwiftUI + MPVKit (libmpv).
+- `design/`: design system. `tokens.json` is the source; `RiffleTheme.swift` mirrors it
+  for SwiftUI (change both together); `README.md` has the usage rules the app follows.
 - `docs/`: architecture and decisions.
 
 ## Server conventions
