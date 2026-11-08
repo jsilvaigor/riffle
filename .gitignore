@@ -1,0 +1,13 @@
+# Go
+/server/riffle-server
+*.test
+
+# Local data from manual runs
+/data/
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+
+.DS_Store
