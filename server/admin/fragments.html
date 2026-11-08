@@ -1,0 +1,178 @@
+{{define "toast"}}<div class="toast{{if not .OK}} err{{end}}" role="status">{{.Msg}}</div>{{end}}
+
+{{define "overview"}}
+<div class="cards">
+  <article class="card">
+    <h2>Server</h2>
+    <dl>
+      <dt>Version</dt><dd>{{.Version}}{{with .Commit}} <span class="muted mono">{{.}}</span>{{end}}</dd>
+      <dt>Uptime</dt><dd>{{dur .Uptime}}</dd>
+      <dt>Decoder</dt>
+      <dd>{{.Trick.effectiveHWAccel}}{{if .Trick.hwDisabled}} <span class="alert">({{.Config.HWAccel}} failed, using CPU)</span>{{end}}</dd>
+      <dt>Thumbnails</dt><dd>every {{.Config.Interval}} s, {{.Config.TileWidth}} px</dd>
+      <dt>Auth</dt>
+      <dd>{{if .AuthRequired}}Token required{{else}}<span class="alert">Open: RIFFLE_TOKEN is empty</span>{{end}}</dd>
+    </dl>
+  </article>
+
+  <article class="card">
+    <h2>Library</h2>
+    <p class="big">{{.Items}} <span>videos</span></p>
+    <dl>
+      <dt>Size</dt><dd>{{bytes .Size}}</dd>
+      <dt>Running time</dt><dd>{{dur .Duration}}</dd>
+      <dt>Resume positions</dt><dd>{{.Progress}}</dd>
+    </dl>
+    {{range .Roots}}
+      <p class="root"><span>{{.Name}}</span> <span class="muted">{{.Count}} videos</span>
+        <span class="muted mono path" title="{{.Path}}"><bdi>{{.Path}}</bdi></span></p>
+    {{end}}
+  </article>
+
+  <article class="card">
+    <h2>Scan</h2>
+    {{with .Scan}}
+      {{if .Scanning}}
+        <p class="big">{{.Probed}} <span>of {{.ToProbe}} probed</span></p>
+        <progress value="{{.Probed}}" max="{{.ToProbe}}"></progress>
+        <p class="muted">{{.Files}} files found{{if .Reprobe}}, {{.Reprobe}} being re-probed{{end}}. Started {{ago .StartedAt}}.</p>
+      {{else}}
+        <p class="big">Idle</p>
+        <p class="muted">Last scan {{ago .FinishedAt}}: {{.Files}} files{{if .ToProbe}}, {{.ToProbe}} probed{{end}}{{if .Reprobe}} ({{.Reprobe}} re-probes){{end}}.</p>
+      {{end}}
+    {{end}}
+    <div class="actions">
+      <button hx-post="/admin/a/rescan" hx-target="#toast" hx-disabled-elt="this">Rescan</button>
+      <button hx-post="/admin/a/reprobe" hx-target="#toast" hx-disabled-elt="this"
+        hx-confirm="Probe every file again? It reads every file's header, so spun-down disks wake up. Thumbnails are kept.">Re-probe all</button>
+    </div>
+  </article>
+
+  <article class="card">
+    <h2>Thumbnails</h2>
+    {{$ready := index .Tricks "ready"}}
+    <p class="big">{{pct $ready .WithVideo}}% <span>{{$ready}} of {{.WithVideo}} ready</span></p>
+    <progress value="{{$ready}}" max="{{.WithVideo}}"></progress>
+    <dl>
+      <dt>Queued</dt><dd>{{.Trick.queued}}{{if .Trick.paused}} <span class="badge">paused</span>{{end}}</dd>
+      <dt>Failed</dt><dd>{{with index .Tricks "failed"}}<span class="alert">{{.}}</span>{{else}}0{{end}}</dd>
+    </dl>
+    <div class="actions">
+      {{if .Trick.paused}}
+        <button hx-post="/admin/a/resume" hx-target="#toast" hx-disabled-elt="this">Resume</button>
+      {{else}}
+        <button hx-post="/admin/a/pause" hx-target="#toast" hx-disabled-elt="this">Pause</button>
+      {{end}}
+      {{if index .Tricks "failed"}}
+        <button hx-post="/admin/a/retry-failed" hx-target="#toast" hx-disabled-elt="this">Retry failed</button>
+      {{end}}
+      <button hx-post="/admin/a/clean-cache" hx-target="#toast" hx-disabled-elt="this"
+        hx-confirm="Remove leftover files: thumbnails of deleted videos, unfinished jobs, cached posters and the test clip? Thumbnails of library videos are kept.">Clean cache</button>
+      <button class="danger" hx-post="/admin/a/regenerate" hx-target="#toast" hx-disabled-elt="this"
+        hx-confirm="Delete every thumbnail and rebuild them all? Scrub previews are missing until each video is redone.">Rebuild all</button>
+    </div>
+  </article>
+</div>
+{{end}}
+
+{{define "jobs"}}
+{{if .recentJobs}}
+<div class="scroll">
+<table>
+  <thead><tr><th>Video</th><th>Decoder</th><th>Took</th><th>When</th></tr></thead>
+  <tbody>
+  {{range .recentJobs}}
+    <tr>
+      <td class="name">{{if .Name}}{{.Name}}{{else}}<span class="mono">{{.ID}}</span>{{end}}
+        {{with .Error}}<div class="err-text mono">{{.}}</div>{{end}}</td>
+      <td>{{.HWAccel}}{{if .Fallback}} <span class="badge">fallback</span>{{end}}</td>
+      <td>{{ms .Millis}}</td>
+      <td class="muted">{{ago .At}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="placeholder">No jobs since the server started{{if .paused}} (paused){{end}}.</p>
+{{end}}
+{{end}}
+
+{{define "problems"}}
+{{if or .Failed .ProbeErrs}}
+<h2>Problems</h2>
+<div class="card scroll">
+<table>
+  <thead><tr><th>Video</th><th>Problem</th><th></th></tr></thead>
+  <tbody>
+  {{range .ProbeErrs}}
+    <tr>
+      <td class="name">{{.Name}}<div class="muted mono">{{.Root}}/{{.Path}}</div></td>
+      <td><span class="err-text">Couldn't read metadata</span><div class="muted mono">{{.ProbeErr}}</div></td>
+      <td><button class="small" hx-post="/admin/a/items/{{.ID}}/reprobe" hx-target="#toast" hx-disabled-elt="this">Re-probe</button></td>
+    </tr>
+  {{end}}
+  {{range .Failed}}
+    <tr>
+      <td class="name">{{.Name}}<div class="muted mono">{{.Root}}/{{.Path}}</div></td>
+      <td><span class="err-text">Thumbnails failed</span>{{with .TrickErr}}<div class="muted mono">{{.}}</div>{{end}}</td>
+      <td><button class="small" hx-post="/admin/a/items/{{.ID}}/thumbnails" hx-target="#toast" hx-disabled-elt="this">Retry</button></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{if or (gt .FailedTotal (len .Failed)) (gt .ProbeErrsTotal (len .ProbeErrs))}}
+  <p class="muted">Showing {{len .ProbeErrs}} of {{.ProbeErrsTotal}} metadata errors and {{len .Failed}} of {{.FailedTotal}} thumbnail failures.</p>
+{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "storage"}}
+<dl>
+  <dt>Thumbnail sheets</dt><dd>{{bytes .Sheets}} <span class="muted">{{.SheetFiles}} files</span></dd>
+  <dt>Cached posters</dt><dd>{{bytes .Posters}} <span class="muted">{{.PosterFiles}} files</span></dd>
+  <dt>Index and progress</dt><dd>{{bytes .Index}}</dd>
+  <dt>Test clip</dt><dd>{{bytes .Diagnostics}}</dd>
+  <dt>Deleted videos</dt><dd>{{if .OrphanDirs}}{{bytes .Orphans}} <span class="muted">{{.OrphanDirs}} folders</span>{{else}}none{{end}}</dd>
+  <dt>Unfinished jobs</dt><dd>{{if .TempDirs}}{{bytes .Temp}} <span class="muted">{{.TempDirs}} folders</span>{{else}}none{{end}}</dd>
+</dl>
+<p class="muted" style="margin-bottom:0">Measured {{ago .At}}. "Clean cache" removes everything except the sheets and the index.</p>
+{{end}}
+
+{{define "countlist"}}
+{{$max := 1}}{{range .}}{{if gt .Count $max}}{{$max = .Count}}{{end}}{{end}}
+<div class="bars">
+{{range .}}<span>{{.Name}}</span><div class="bar" style="width: {{pct .Count $max}}%"></div><span class="muted">{{.Count}}</span>{{end}}
+</div>
+{{end}}
+
+{{define "breakdown"}}
+<h2 style="margin-top:4px">Video codec</h2>{{template "countlist" .Codecs}}
+<h2 style="margin-top:16px">Container</h2>{{template "countlist" .Containers}}
+<h2 style="margin-top:16px">Resolution</h2>{{template "countlist" .Resolutions}}
+<h2 style="margin-top:16px">Orientation</h2>{{template "countlist" .Orientation}}
+{{end}}
+
+{{define "diagnostics"}}
+<div class="scroll" style="margin-top:14px">
+<table>
+  <thead><tr><th>Test</th><th>Result</th><th>Took</th></tr></thead>
+  <tbody>
+  {{range .tests}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td>{{if .OK}}<span class="ok-text">Works</span>{{else if .Skipped}}<span class="muted">Skipped: {{.Skipped}}</span>{{else}}<span class="err-text">Failed</span><div class="muted mono">{{.Error}}</div>{{end}}</td>
+      <td>{{if .Millis}}{{ms .Millis}}{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<dl style="margin-top:14px">
+  <dt>GPU</dt><dd class="mono">{{.gpu.nvidiaSmi}}</dd>
+  <dt>Intel devices</dt><dd class="mono">{{range .gpu.dri}}{{.}} {{else}}none{{end}}</dd>
+  <dt>ffmpeg</dt><dd class="mono">{{.ffmpeg.version}}</dd>
+  <dt>Decoders</dt><dd class="mono">{{range .ffmpeg.hwaccels}}{{.}} {{end}}</dd>
+</dl>
+{{end}}

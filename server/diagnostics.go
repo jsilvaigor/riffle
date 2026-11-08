@@ -50,9 +50,12 @@ var diagMu sync.Mutex
 // fallback shows up as a failure. "trickplay" runs the production pipeline with the
 // configured accelerator.
 func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.runDiagnostics(r.Context()))
+}
+
+func (s *Server) runDiagnostics(ctx context.Context) map[string]any {
 	diagMu.Lock()
 	defer diagMu.Unlock()
-	ctx := r.Context()
 
 	resp := map[string]any{
 		"version":   version,
@@ -80,8 +83,7 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request) {
 	sample, err := s.diagSample(ctx)
 	if err != nil {
 		resp["tests"] = []DecodeTest{{Name: "sample", Error: err.Error()}}
-		writeJSON(w, http.StatusOK, resp)
-		return
+		return resp
 	}
 	tests := []DecodeTest{
 		decodeTest(ctx, "none", sample),
@@ -90,7 +92,7 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request) {
 	}
 	tests = append(tests, s.trickplayTest(ctx, sample))
 	resp["tests"] = tests
-	writeJSON(w, http.StatusOK, resp)
+	return resp
 }
 
 // diagSample generates (once) a short h264 clip in the data dir to decode.

@@ -50,6 +50,8 @@ the top priority. Two parts:
 - [x] Server: first scan queues trickplay per probed file and saves the index as it goes
 - [x] Server: poster endpoint (cropped trickplay tile), gzip + ETag on library/progress,
   trickplay for short single-keyframe clips
+- [x] Server: admin dashboard at `/admin/` (htmx, embedded): stats, scan and thumbnail
+  actions, problems list, hardware tests
 - [ ] Server: Bonjour advertisement, Unraid template XML
 - [x] Server: rotation and display size in item metadata, for player orientation
 - [ ] iOS app: project setup with MPVKit, library browser, player, custom scrub bar

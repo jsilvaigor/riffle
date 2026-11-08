@@ -67,6 +67,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/items/{id}/trickplay/{n}", s.auth(s.trickSheet))
 	mux.HandleFunc("GET /api/progress", s.auth(s.allProgress))
 	mux.HandleFunc("PUT /api/items/{id}/progress", s.auth(s.putProgress))
+	s.adminRoutes(mux)
 	return logRequests(mux)
 }
 

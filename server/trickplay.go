@@ -48,6 +48,14 @@ type trickQueue struct {
 	cond   *sync.Cond
 	list   []string
 	queued map[string]bool
+	paused bool // workers wait; the queue keeps filling
+}
+
+func (q *trickQueue) setPaused(p bool) {
+	q.mu.Lock()
+	q.paused = p
+	q.cond.Broadcast()
+	q.mu.Unlock()
 }
 
 func newTrickQueue() *trickQueue {
@@ -82,7 +90,7 @@ func (q *trickQueue) push(id string, front bool) {
 func (q *trickQueue) pop(ctx context.Context) (string, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	for len(q.list) == 0 {
+	for len(q.list) == 0 || q.paused {
 		if ctx.Err() != nil {
 			return "", false
 		}
@@ -101,11 +109,12 @@ type Trickplay struct {
 	hwBroken atomic.Bool
 
 	jobsMu sync.Mutex
-	jobs   []TrickJob // newest first
+	jobs   []TrickJob      // newest first
+	active map[string]bool // items being generated right now (guarded by jobsMu)
 }
 
 func NewTrickplay(cfg Config, lib *Library) *Trickplay {
-	return &Trickplay{cfg: cfg, lib: lib, q: newTrickQueue()}
+	return &Trickplay{cfg: cfg, lib: lib, q: newTrickQueue(), active: map[string]bool{}}
 }
 
 func (t *Trickplay) Dir(id string) string {
@@ -132,7 +141,13 @@ func (t *Trickplay) worker(ctx context.Context) {
 			return
 		}
 		start := time.Now()
+		t.jobsMu.Lock()
+		t.active[id] = true
+		t.jobsMu.Unlock()
 		hw, err := t.generate(ctx, id)
+		t.jobsMu.Lock()
+		delete(t.active, id)
+		t.jobsMu.Unlock()
 		if err != nil && ctx.Err() != nil {
 			return
 		}
@@ -141,7 +156,7 @@ func (t *Trickplay) worker(ctx context.Context) {
 		if err != nil {
 			log.Printf("trickplay %s: %v", id, err)
 			job.Error = err.Error()
-			t.lib.SetTrickplay(id, TrickFailed)
+			t.lib.setTrickErr(id, tail(err.Error(), 300))
 		} else {
 			log.Printf("trickplay %s: done in %s (%s)", id, time.Since(start).Round(time.Millisecond), hw)
 			t.lib.SetTrickplay(id, TrickReady)
@@ -176,14 +191,14 @@ func (t *Trickplay) Status() map[string]any {
 		counts[it.Trickplay]++
 	}
 	t.q.mu.Lock()
-	queued := len(t.q.list)
+	queued, paused := len(t.q.list), t.q.paused
 	t.q.mu.Unlock()
 	t.jobsMu.Lock()
 	jobs := append([]TrickJob{}, t.jobs...)
 	t.jobsMu.Unlock()
 	return map[string]any{
 		"effectiveHWAccel": effective, "hwDisabled": t.hwBroken.Load(),
-		"queued": queued, "items": counts, "recentJobs": jobs,
+		"queued": queued, "paused": paused, "items": counts, "recentJobs": jobs,
 	}
 }
 
@@ -317,4 +332,91 @@ func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, i
 		return fmt.Errorf("%v: %s", err, tail(stderr.String(), 500))
 	}
 	return nil
+}
+
+// Admin actions. Each one leaves the library and queue consistent with the files on
+// disk; a job already running finishes and records its own result.
+
+// SetPaused stops or resumes the workers (not persisted across restarts).
+func (t *Trickplay) SetPaused(p bool) { t.q.setPaused(p) }
+
+func (t *Trickplay) Paused() bool {
+	t.q.mu.Lock()
+	defer t.q.mu.Unlock()
+	return t.q.paused
+}
+
+// RetryFailed queues every failed item again and returns how many.
+func (t *Trickplay) RetryFailed() int {
+	n := 0
+	for _, it := range t.lib.Snapshot() {
+		if it.Trickplay == TrickFailed {
+			t.Enqueue(it.ID, false)
+			n++
+		}
+	}
+	return n
+}
+
+// Regenerate deletes one item's sheets and queues it ahead of the backlog.
+func (t *Trickplay) Regenerate(id string) {
+	os.RemoveAll(t.Dir(id))
+	t.Enqueue(id, true)
+	t.lib.save()
+}
+
+// RegenerateAll deletes every item's sheets and queues them all again.
+func (t *Trickplay) RegenerateAll() int {
+	n := 0
+	for _, it := range t.lib.Snapshot() {
+		os.RemoveAll(t.Dir(it.ID))
+		if it.Probe != nil && it.Probe.Video != nil {
+			t.Enqueue(it.ID, false)
+			n++
+		} else {
+			t.lib.SetTrickplay(it.ID, TrickNone)
+		}
+	}
+	t.lib.save()
+	return n
+}
+
+// CleanCache removes what can be rebuilt or is left over: folders of items no longer
+// in the library, temp folders from interrupted jobs, cached posters, and the
+// diagnostics sample. Sheets of library items are kept.
+func (t *Trickplay) CleanCache() (files int, bytes int64) {
+	remove := func(path string) {
+		filepath.WalkDir(path, func(_ string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				if info, err := d.Info(); err == nil {
+					files++
+					bytes += info.Size()
+				}
+			}
+			return nil
+		})
+		os.RemoveAll(path)
+	}
+	root := filepath.Join(t.cfg.DataDir, "trickplay")
+	entries, _ := os.ReadDir(root)
+	t.jobsMu.Lock()
+	active := make(map[string]bool, len(t.active))
+	for id := range t.active {
+		active[id] = true
+	}
+	t.jobsMu.Unlock()
+	for _, e := range entries {
+		name := e.Name()
+		id, isTmp := strings.CutSuffix(name, ".tmp")
+		switch {
+		case isTmp && !active[id]:
+			remove(filepath.Join(root, name))
+		case !isTmp && t.lib.Get(id) == nil:
+			remove(filepath.Join(root, name))
+		case !isTmp:
+			remove(filepath.Join(root, name, "poster.jpg"))
+		}
+	}
+	remove(filepath.Join(t.cfg.DataDir, "diagnostics"))
+	return files, bytes
 }
