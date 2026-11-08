@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"log"
 	"math"
@@ -41,6 +42,7 @@ type Item struct {
 	Probe     *Probe    `json:"probe,omitempty"`
 	ProbeErr  string    `json:"probeError,omitempty"`
 	Trickplay string    `json:"trickplay"`
+	TrickErr  string    `json:"trickplayError,omitempty"` // why the last trickplay job failed
 
 	abs string
 }
@@ -175,7 +177,11 @@ func writeFileAtomic(path string, b []byte) error {
 // file is queued for trickplay as soon as it's probed, and the index is saved every
 // few seconds, so a first scan of a large library on spun-down disks shows progress
 // (and survives a restart) instead of committing everything at the end.
-func (l *Library) Scan(ctx context.Context) {
+func (l *Library) Scan(ctx context.Context) { l.ScanWith(ctx, false) }
+
+// ScanWith is Scan; reprobe also probes every unchanged file again (including ones
+// whose probe failed), keeping their thumbnails.
+func (l *Library) ScanWith(ctx context.Context, force bool) {
 	l.scanMu.Lock()
 	defer l.scanMu.Unlock()
 	start := time.Now()
@@ -230,7 +236,7 @@ func (l *Library) Scan(ctx context.Context) {
 			// Same file, but indexed before the probe learned new fields: probe it again,
 			// keeping its thumbnails and everything else. It's also queued with the
 			// unchanged items below, so its trickplay doesn't wait for the probe.
-			if old.Probe != nil && old.Probe.Version < probeVersion {
+			if force || (old.Probe != nil && old.Probe.Version < probeVersion) {
 				toProbe = append(toProbe, old)
 				reprobe++
 			}
@@ -371,6 +377,42 @@ func (l *Library) SetTrickplay(id, state string) {
 	l.mu.Lock()
 	if it, ok := l.items[id]; ok {
 		it.Trickplay = state
+		if state != TrickFailed {
+			it.TrickErr = ""
+		}
 	}
 	l.mu.Unlock()
+}
+
+func (l *Library) setTrickErr(id, msg string) {
+	l.mu.Lock()
+	if it, ok := l.items[id]; ok {
+		it.Trickplay, it.TrickErr = TrickFailed, msg
+	}
+	l.mu.Unlock()
+}
+
+// Reprobe probes one item again now and queues its trickplay if it's missing.
+func (l *Library) Reprobe(ctx context.Context, id string) error {
+	l.mu.RLock()
+	it, ok := l.items[id]
+	var abs string
+	if ok {
+		abs = it.abs
+	}
+	l.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("item not found")
+	}
+	p, err := probeFile(ctx, abs)
+	l.mu.Lock()
+	if err != nil {
+		it.ProbeErr = err.Error()
+	} else {
+		it.Probe, it.ProbeErr = p, ""
+	}
+	l.mu.Unlock()
+	l.save()
+	l.queueTrickplay(it)
+	return err
 }

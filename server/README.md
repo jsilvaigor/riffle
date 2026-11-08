@@ -89,6 +89,7 @@ All endpoints except `/api/health` require the token, sent as `Authorization: Be
 | Method & path | Description |
 |---|---|
 | `GET /api/health` | Server name, version, commit, whether auth is required |
+| `GET /admin/` | Admin dashboard (see below); its fragments and actions under `/admin/f/` and `/admin/a/` need the token |
 | `GET /api/diagnostics` | Build, ffmpeg/GPU environment and live decode tests (takes 1-3 s) |
 | `GET /api/library` | `{roots: [...], items: [...]}` with metadata and trickplay state. Gzipped when accepted; weak `ETag`, so a refresh with `If-None-Match` gets a 304 |
 | `POST /api/library/rescan` | Trigger a rescan (202) |
@@ -128,6 +129,31 @@ with anamorphic videos thumbnailed before 0.2.2.
 Thumbnail `k` shows time `k * interval`. It's in sheet `k / (columns*rows)`, at cell
 `k % (columns*rows)` counting left to right, top to bottom. A 2-hour movie is about
 15 sheets, roughly 5-7 MB in total, so the app can prefetch all of them when a video opens.
+
+### Admin dashboard
+
+Open `http://<server>:8770/admin/` in a browser. It asks for the token once and keeps it in
+that browser's localStorage ("Change token" in the header forgets it). The page is built with
+[htmx](https://htmx.org) 2.0.4, vendored in `admin/` and embedded in the binary, so it works
+without internet access.
+
+It refreshes on its own (overview and jobs every 5 s, problems every 30 s, storage and
+breakdown every minute) and shows:
+
+- **Server:** version, uptime, the decoder in use (and whether the GPU fell back to CPU)
+- **Library:** video count, size, running time, resume positions, media roots
+- **Scan:** idle or probing N of M; **Rescan** and **Re-probe all** (re-reads every file's
+  metadata, keeping thumbnails)
+- **Thumbnails:** progress, queue, failures; **Pause**/**Resume** (not kept across restarts),
+  **Retry failed**, **Clean cache** (removes thumbnails of deleted videos, unfinished jobs,
+  cached posters and the diagnostics clip) and **Rebuild all** (deletes every thumbnail and
+  queues the library again)
+- **Recent thumbnail jobs**, with the decoder and time each took
+- **Problems:** files whose metadata couldn't be read (**Re-probe**) and thumbnail failures
+  with ffmpeg's error (**Retry**, ahead of the queue)
+- **Storage** used in `RIFFLE_DATA`, and a **library breakdown** by codec, container,
+  resolution and orientation
+- **Hardware tests:** the `/api/diagnostics` decode tests, run on demand
 
 ### Diagnostics
 
