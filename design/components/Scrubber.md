@@ -6,11 +6,13 @@ Riffle's signature control: the timeline you drag to seek, with an instant trick
 - `duration`, `position` and `buffered`, all in seconds (`buffered` is the furthest point loaded, not a length).
 - `getPreview(seconds)`: returns the frame for that time. Use `Riffle.trickplayCell(manifest, seconds, sheetUrl)` with the Riffle Server trickplay manifest; it returns the sprite cell, which the scrubber scales into its 160 × 90 frame. Return `null` while the server is still generating sheets: the frame then reads "Preview not ready" and the time still shows.
 - `onScrub(seconds)` while dragging, `onSeek(seconds)` on release.
+- `previewAspect`: the video's display width ÷ height, so the empty frame has the right shape before a cell arrives.
+- `scrubLabel`: the fine-scrubbing speed while the finger is raised ("Half-speed scrubbing", "Quarter-speed scrubbing", "Fine scrubbing").
 
 ## Anatomy
 - Track: `radius-pill`, 4 pt (8 pt while dragging). Unplayed `line`, buffered `ink-muted`, played `citron`.
 - Thumb: 14 pt `citron` disc, scales to 1.6× while dragging.
-- Preview: the frame in a 2 pt `ink` border with `radius-md`, the target time under it in `timecode` on `scrim`.
+- Preview: the frame in a 2 pt `ink` border with `radius-md`, the target time under it in `timecode` on `scrim`. Its long side is 160 pt and its shape follows the video: 160 × 90 for 16:9, 90 × 160 for a portrait 9:16 video, taken from the manifest's `tileWidth` and `tileHeight`.
 - Readouts: elapsed left, remaining right with a minus sign, in `timecode` and `ink`.
 
 ## Rules

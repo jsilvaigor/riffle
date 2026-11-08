@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -61,7 +62,8 @@ type Library struct {
 type ScanStatus struct {
 	Scanning   bool      `json:"scanning"`
 	Files      int       `json:"files"`   // video files found by the current or last scan
-	ToProbe    int       `json:"toProbe"` // new or changed files to probe
+	ToProbe    int       `json:"toProbe"` // files to probe: new, changed, or re-probed
+	Reprobe    int       `json:"reprobe"` // of those, unchanged files probed again for new fields
 	Probed     int       `json:"probed"`
 	StartedAt  time.Time `json:"startedAt,omitempty"`
 	FinishedAt time.Time `json:"finishedAt,omitempty"`
@@ -218,12 +220,20 @@ func (l *Library) Scan(ctx context.Context) {
 
 	seen := make(map[string]bool, len(files))
 	var toProbe, unchanged []*Item
+	reprobe := 0
 	l.mu.Lock()
 	for _, f := range files {
 		id := itemID(f.root, f.rel)
 		seen[id] = true
 		old, ok := l.items[id]
 		if ok && old.Size == f.info.Size() && old.ModTime.Equal(f.info.ModTime()) {
+			// Same file, but indexed before the probe learned new fields: probe it again,
+			// keeping its thumbnails and everything else. It's also queued with the
+			// unchanged items below, so its trickplay doesn't wait for the probe.
+			if old.Probe != nil && old.Probe.Version < probeVersion {
+				toProbe = append(toProbe, old)
+				reprobe++
+			}
 			unchanged = append(unchanged, old)
 			continue
 		}
@@ -244,9 +254,10 @@ func (l *Library) Scan(ctx context.Context) {
 	for _, id := range removed {
 		os.RemoveAll(filepath.Join(l.cfg.DataDir, "trickplay", id))
 	}
-	l.setStatus(func(s *ScanStatus) { s.Files, s.ToProbe = len(files), len(toProbe) })
+	l.setStatus(func(s *ScanStatus) { s.Files, s.ToProbe, s.Reprobe = len(files), len(toProbe), reprobe })
 	if len(toProbe) > 0 {
-		log.Printf("scan: %d files, probing %d new/changed", len(files), len(toProbe))
+		log.Printf("scan: %d files, probing %d new/changed and re-probing %d for new metadata",
+			len(files), len(toProbe)-reprobe, reprobe)
 	}
 
 	// Already-probed items (e.g. after a restart) don't wait for the probes below.
@@ -270,12 +281,24 @@ func (l *Library) Scan(ctx context.Context) {
 			defer func() { <-sem }()
 			p, err := probeFile(ctx, it.abs)
 			l.mu.Lock()
-			if err != nil {
+			wasReady := it.Probe != nil && it.Trickplay == TrickReady
+			switch {
+			case err != nil && it.Probe != nil:
+				// A failed re-probe keeps the old metadata; the next scan tries again.
+				log.Printf("scan: re-probe %s: %v", it.Path, err)
+			case err != nil:
 				it.ProbeErr = err.Error()
-			} else {
+			default:
 				it.Probe, it.ProbeErr = p, ""
 			}
+			stale := err == nil && wasReady && l.tilesStale(it)
+			if stale {
+				it.Trickplay = TrickNone
+			}
 			l.mu.Unlock()
+			if stale {
+				log.Printf("scan: %s: thumbnails don't match the display shape, regenerating", it.Path)
+			}
 			l.queueTrickplay(it)
 
 			progMu.Lock()
@@ -294,8 +317,30 @@ func (l *Library) Scan(ctx context.Context) {
 	}
 	wg.Wait()
 	l.save()
-	log.Printf("scan: %d files, %d new/changed, %d removed in %s",
-		len(files), len(toProbe), len(removed), time.Since(start).Round(time.Millisecond))
+	log.Printf("scan: %d files, %d new/changed, %d re-probed, %d removed in %s",
+		len(files), len(toProbe)-reprobe, reprobe, len(removed), time.Since(start).Round(time.Millisecond))
+}
+
+// tilesStale reports whether an item's trickplay tiles have a different shape from
+// the video's display size. Servers before 0.2.2 sized tiles from the stored pixels,
+// so anamorphic videos (non-square pixels, e.g. DVD rips) got squashed thumbnails.
+// Callers hold l.mu.
+func (l *Library) tilesStale(it *Item) bool {
+	v := it.Probe.Video
+	if v == nil || v.DisplayWidth <= 0 || v.DisplayHeight <= 0 {
+		return false
+	}
+	b, err := os.ReadFile(filepath.Join(l.cfg.DataDir, "trickplay", it.ID, "manifest.json"))
+	if err != nil {
+		return false
+	}
+	var m Manifest
+	if json.Unmarshal(b, &m) != nil || m.TileWidth <= 0 || m.TileHeight <= 0 {
+		return false
+	}
+	want := float64(v.DisplayWidth) / float64(v.DisplayHeight)
+	got := float64(m.TileWidth) / float64(m.TileHeight)
+	return math.Abs(got-want)/want > 0.03 // tile heights are rounded to even pixels
 }
 
 // Get returns the live item (callers must not mutate it without the lock).

@@ -29,6 +29,7 @@ the top priority. Two parts:
 | Server state | JSON files in `/data` (SSD) | Fine for a personal library; no database dependency |
 | Discovery | Manual address for now; Bonjour later | Bonjour needs a third-party Go library |
 | Remote access | Tailscale/WireGuard, no open ports | Safer than exposing the server |
+| Player orientation | Follows the video: portrait plays portrait; only wide videos request landscape, once | Portrait phone clips must not be forced sideways. The server reports display size after rotation, so the app decides before the first frame (`design/player.md`) |
 
 ## Scrubbing model (client)
 
@@ -50,4 +51,5 @@ the top priority. Two parts:
 - [x] Server: poster endpoint (cropped trickplay tile), gzip + ETag on library/progress,
   trickplay for short single-keyframe clips
 - [ ] Server: Bonjour advertisement, Unraid template XML
+- [x] Server: rotation and display size in item metadata, for player orientation
 - [ ] iOS app: project setup with MPVKit, library browser, player, custom scrub bar

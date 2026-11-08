@@ -10,7 +10,8 @@ performance is the top priority.** Read `docs/architecture.md` for decisions and
 - `ios/`: Riffle iOS app (not started yet). Plan: SwiftUI + MPVKit (libmpv).
 - `design/`: design system. `tokens.json` is the source; `RiffleTheme.swift` mirrors it
   for SwiftUI (change both together); `README.md` has the usage rules the app follows;
-  `components/` has a guideline per app control. Build iOS UI from these.
+  `components/` has a guideline per app control; `player.md` specifies the player
+  (orientation follows the video, gestures, scrubbing). Build iOS UI from these.
 - `docs/`: architecture and decisions.
 
 ## Server conventions

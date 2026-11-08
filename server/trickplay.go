@@ -303,7 +303,9 @@ func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, i
 	args = append(args,
 		"-i", src,
 		"-map", fmt.Sprintf("0:%d", stream), "-an", "-sn", "-dn",
-		"-vf", fmt.Sprintf("fps=%.6f,scale=%d:-2:flags=bilinear,tile=%dx%d",
+		// The height follows the display aspect ratio (dar), so non-square pixels
+		// (anamorphic DVD rips) give correctly shaped tiles; setsar=1 marks them square.
+		"-vf", fmt.Sprintf("fps=%.6f,scale=%d:trunc(ow/dar/2)*2:flags=bilinear,setsar=1,tile=%dx%d",
 			1/interval, t.cfg.TileWidth, sheetCols, sheetRows),
 		"-q:v", "5", "-start_number", "0",
 		filepath.Join(outDir, "%03d.jpg"),

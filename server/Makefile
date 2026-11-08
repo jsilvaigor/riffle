@@ -25,14 +25,23 @@ test: check ## check + unit tests with the race detector
 # A few codecs the iOS client has to handle; skipped if already generated.
 media: ## generate test videos in testdata/media
 	@mkdir -p testdata/media
-	ffmpeg -hide_banner -loglevel error -n -f lavfi -i testsrc2=duration=60:size=1280x720:rate=30 \
-		-c:v libx264 -preset veryfast -crf 30 -g 60 testdata/media/h264.mkv || true
-	ffmpeg -hide_banner -loglevel error -n -f lavfi -i testsrc2=duration=60:size=1920x1080:rate=24 \
-		-c:v libx265 -preset ultrafast -crf 32 -tag:v hvc1 -x265-params log-level=error testdata/media/hevc.mp4 || true
-	ffmpeg -hide_banner -loglevel error -n -f lavfi -i testsrc2=duration=60:size=640x480:rate=25 \
-		-c:v wmv2 -b:v 1M testdata/media/wmv2.wmv || true
-	ffmpeg -hide_banner -loglevel error -n -f lavfi -i testsrc2=duration=4:size=1080x1430:rate=30 \
-		-c:v libx264 -g 250 testdata/media/short-portrait.mp4 || true
+	test -f testdata/media/h264.mkv || ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=duration=60:size=1280x720:rate=30 \
+		-c:v libx264 -preset veryfast -crf 30 -g 60 testdata/media/h264.mkv
+	test -f testdata/media/hevc.mp4 || ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=duration=60:size=1920x1080:rate=24 \
+		-c:v libx265 -preset ultrafast -crf 32 -tag:v hvc1 -x265-params log-level=error testdata/media/hevc.mp4
+	test -f testdata/media/wmv2.wmv || ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=duration=60:size=640x480:rate=25 \
+		-c:v wmv2 -b:v 1M testdata/media/wmv2.wmv
+	test -f testdata/media/short-portrait.mp4 || ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=duration=4:size=1080x1430:rate=30 \
+		-c:v libx264 -g 250 testdata/media/short-portrait.mp4
+	@# A phone-style portrait clip: landscape pixels plus a 90° display rotation.
+	test -f testdata/media/portrait-phone.mp4 || { \
+		ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc2=duration=30:size=1920x1080:rate=30 \
+			-c:v libx264 -preset veryfast -crf 30 -g 60 testdata/.portrait-raw.mp4 && \
+		ffmpeg -hide_banner -loglevel error -n -display_rotation:v:0 -90 -i testdata/.portrait-raw.mp4 \
+			-c copy testdata/media/portrait-phone.mp4; rm -f testdata/.portrait-raw.mp4; }
+	@# An anamorphic clip (720x480 with 32:27 pixels, shown as 16:9), like a DVD rip.
+	test -f testdata/media/anamorphic.mkv || ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=duration=30:size=720x480:rate=30 \
+		-vf setsar=32/27 -c:v libx264 -preset veryfast -crf 30 testdata/media/anamorphic.mkv
 
 dev: ## run the server natively against testdata/media (CPU decoding)
 	RIFFLE_MEDIA=Test=$(CURDIR)/testdata/media RIFFLE_DATA=$(CURDIR)/data RIFFLE_TOKEN=$(TOKEN) \
