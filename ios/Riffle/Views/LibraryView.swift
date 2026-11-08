@@ -14,6 +14,14 @@ struct LibraryView: View {
                 .libraryDestinations(playing: $playing)
         }
         .playerCover($playing)
+        #if DEBUG
+        // `defaults write dev.isilva.riffle debug.autoplay <item id>` opens it at launch.
+        .task(id: model.library?.items.count) {
+            guard playing == nil, let id = UserDefaults.standard.string(forKey: "debug.autoplay"),
+                  let item = model.item(id) else { return }
+            playing = PlaybackRequest(item: item, start: 0)
+        }
+        #endif
     }
 
     @ViewBuilder private var content: some View {

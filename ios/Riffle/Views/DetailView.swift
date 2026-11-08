@@ -104,7 +104,7 @@ private struct TechnicalDetails: View {
                 ForEach(Array(probe.subtitles.enumerated()), id: \.offset) { i, s in
                     row(i == 0 ? "Subtitles" : "", subtitle(s))
                 }
-                row("File", [item.name, probe.container?.uppercased(), Format.size(item.size)]
+                row("File", [item.name, Format.size(item.size)]
                     .compactMap { $0 }.joined(separator: " · "), last: true)
             }
             .background(Riffle.Palette.surfaceRaised, in: .rect(cornerRadius: Riffle.Radius.md))
