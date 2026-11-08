@@ -1,8 +1,8 @@
 # Riffle design system
 
-Usage rules for the Riffle iOS app. The tokens live in [`tokens.json`](tokens.json) and are mirrored for SwiftUI in [`RiffleTheme.swift`](RiffleTheme.swift); change both together. The editable version, with the visual cover and token views, is the Riffle design system artifact on claude.ai.
+Usage rules for the Riffle iOS app. The tokens live in [`tokens.json`](tokens.json) and are mirrored for SwiftUI in [`RiffleTheme.swift`](RiffleTheme.swift); change both together. Component guidelines are in [`components/`](components/). The editable version, with the visual cover and token views, is the Riffle design system artifact on claude.ai.
 
-Riffle is a video player for iPhone and iPad. The video is the interface; everything Riffle draws is there to get out of its way, then come back the instant you reach for it. The system is dark-first, quiet, and spends its one accent, `citron`, on the thing you touch most: the scrubber.
+Riffle is a personal video player for iPhone and iPad that streams your own library from Riffle Server on your NAS. The video is the interface; everything Riffle draws is there to get out of its way, then come back the instant you reach for it. The system is dark-first, quiet, and spends its one accent, `citron`, on the thing you touch most: the scrubber.
 
 ## Principles
 
@@ -14,21 +14,22 @@ Riffle is a video player for iPhone and iPad. The video is the interface; everyt
 ## Content fundamentals
 
 - **Voice:** brief, calm, plain. Talk to the viewer as "you"; Riffle never says "I" or "we" in the interface.
-- **Casing:** sentence case for titles, buttons and menu items ("Continue watching", "Download in HD"). Uppercase only in `label` badges (LIVE, 4K, HDR, CC).
-- **Verbs on buttons:** "Play", "Resume", "Download", "Remove download"; not "OK" or "Submit".
+- **Casing:** sentence case for titles, buttons and menu items ("Continue watching", "Rescan library"). Uppercase only in `label` badges (4K, HDR, HEVC, 5.1, CC).
+- **Verbs on buttons:** "Play", "Resume", "Rescan library", "Try again"; not "OK" or "Submit".
+- **Names:** call the companion "Riffle Server" and the places it indexes "folders". Show file names with their extension when there's no better title, so formats stay recognisable.
 - **Times:** `m:ss` under an hour, `h:mm:ss` over it ("4:07", "1:04:37"). Elapsed left of the scrubber, remaining right with a minus sign ("−12:40").
-- **Errors** say what happened and what to do: "Couldn't load this video. Check your connection and try again."
+- **Errors** say what happened and what to do: "Couldn't load this video. Check that Riffle Server is running and try again." Waits that have a cause say so: "Waking up the disk…".
 - **No emoji** in the interface, and no exclamation marks.
 
 ## Color
 
 There is one theme, Dark. Video looks best against black, and the dark surfaces keep attention on the frame.
 
-- Fill the space around the video with `stage`. Use `surface` for every other screen's background, and `surface-raised` for cards, sheets, menus and the mini-player bar.
-- Set primary text and icons in `ink`, and secondary text (channel, date, duration) in `ink-muted`. Both read on `surface`, `surface-raised`, `stage` and `scrim`.
+- Fill the space around the video with `stage`. Use `surface` for every other screen's background, and `surface-raised` for cards, sheets, menus and notices.
+- Set primary text and icons in `ink`, and secondary text (duration, size, codec, folder) in `ink-muted`. `ink` reads on `surface`, `surface-raised`, `stage` and `scrim`; `ink-muted` on the first three only, so in the player secondary text is `ink` too.
 - Use `citron` for: the played part of the scrubber and its thumb; the primary Play or Resume button; the selected tab; links; the focus ring. Label anything on a `citron` fill in `on-citron`. Outside the scrubber, allow one `citron` element per view.
 - Lay `scrim` over the video whenever player controls show. Controls never sit on the bare frame.
-- Use `alert` only for errors, failed downloads and the LIVE badge, and always pair it with a word or an icon so it never relies on colour alone.
+- Use `alert` only for errors (an unreadable file, a video that won't load, an offline server), and always pair it with a word or an icon so it never relies on colour alone.
 - `line` is for decorative hairlines and the unplayed scrubber track. It is too faint for a control border: outline controls in `ink-muted`.
 
 ## Type
@@ -36,11 +37,12 @@ There is one theme, Dark. Video looks best against black, and the dark surfaces 
 Riffle uses the iOS system font (SF Pro) through the `sans` family, so it follows the viewer's device and Dynamic Type. Treat the sizes below as the Large (default) Dynamic Type step and scale with it.
 
 - `display`: the large navigation title, once per screen.
-- `title`: section headers ("Continue watching", "Downloads") and the video title on its detail page.
+- `title`: section headers ("Continue watching", "Movies") and the video title on its detail page.
 - `headline`: video titles on cards and rows, sheet titles, button labels.
 - `body`: descriptions, settings and dialogs.
 - `caption`: metadata under a title, always in `ink-muted`.
 - `label`: uppercase badges only.
+- `tab`: tab bar labels only.
 - `timecode` (the `mono` family): every time readout, so digits don't shift while the video plays. On iOS, SF Pro with tabular figures is an acceptable substitute.
 
 ## Spacing and layout
@@ -52,14 +54,14 @@ Riffle uses the iOS system font (SF Pro) through the `sans` family, so it follow
 
 ## Shape
 
-- `radius-md` on thumbnails, cards, sheets and the mini-player bar. The video itself is square-cornered in full screen.
+- `radius-md` on buttons, thumbnails, cards, sheets, notices and the scrub preview frame. The video itself is square-cornered in full screen.
 - `radius-sm` on badges and duration chips.
 - `radius-pill` on the Play button and other round transport controls, the scrubber track and thumb, chips and segmented controls.
 - No shadows. Separate layers by surface (`surface` → `surface-raised`) and, where needed, a `line` hairline.
 
 ## The scrubber
 
-The scrubber is Riffle's signature element. Draw it as a `radius-pill` track: unplayed in `line`, buffered in `ink-muted`, played in `citron`, with a `citron` thumb. While dragging, the thumb grows, a thumbnail preview of the target frame appears above it in a `radius-md` frame, and the time above it is set in `timecode`.
+The scrubber is Riffle's signature element. Draw it as a `radius-pill` track: unplayed in `line`, buffered in `ink-muted`, played in `citron`, with a `citron` thumb. While dragging, the thumb grows and the target frame appears above it in a `radius-md` frame with the time under it in `timecode`. That frame comes from the trickplay sheets Riffle Server pre-renders, prefetched when the video opens, so dragging never waits on the network. See the Scrubber component.
 
 ## States
 
@@ -74,7 +76,27 @@ Controls fade in and out over 200 ms. Sheets use the standard iOS spring. Respec
 
 ## Iconography
 
-Use SF Symbols throughout, in the weight that matches the adjacent text (Regular beside `body`, Semibold beside `headline`). Use filled variants for transport controls (`play.fill`, `pause.fill`, `gobackward.10`, `goforward.10`) and outlined variants elsewhere. Icons take `ink` or `ink-muted`; the Play glyph on a `citron` button takes `on-citron`.
+Use SF Symbols throughout, in the weight that matches the adjacent text (Regular beside `body`, Semibold beside `headline`). Use filled variants for transport controls and outlined variants elsewhere. Icons take `ink` or `ink-muted`; the Play glyph on a `citron` button takes `on-citron`; the selected tab takes `citron`.
+
+SF Symbols can't ship outside Apple platforms, so the component previews draw simple stand-in glyphs. Each maps to one symbol:
+
+| Preview glyph | SF Symbol | Where |
+| --- | --- | --- |
+| play, pause | `play.fill`, `pause.fill` | Transport, Resume button |
+| back10, forward10 | `gobackward.10`, `goforward.10` | Transport |
+| close | `xmark` | Player |
+| tracks | `text.bubble` | Player: audio and subtitles |
+| pip | `pip.enter` | Player |
+| folder, film | `folder`, `film` | Library rows, empty thumbnails |
+| chevronRight | `chevron.right` | Folder rows |
+| library, search, settings | `rectangle.stack`, `magnifyingglass`, `slider.horizontal.3` | Tab bar |
+| server | `server.rack` | Server status |
+| check | `checkmark` | Track sheet |
+| alert, info | `exclamationmark.triangle`, `info.circle` | Errors, notices |
+
+## Components
+
+Each control the app needs has a guideline in [`components/`](components/): Button, TransportButton, Scrubber, PlayerControls, TrackSheet, VideoCard, LibraryRow, Badge, TabBar, ServerStatus and Notice. Build them in SwiftUI from those rules and the tokens in `RiffleTheme.swift`. Live previews of each are in the design system artifact on claude.ai.
 
 ## Logo
 

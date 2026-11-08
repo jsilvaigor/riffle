@@ -52,6 +52,8 @@ enum Riffle {
         static let label = Font.caption2.weight(.semibold)
         /// Tracking for `label`: 0.06 em at 11 pt.
         static let labelTracking: CGFloat = 0.66
+        /// 10/12 medium — tab bar labels. `TabView` draws its own; use only for a custom bar.
+        static let tab = Font.system(size: 10, weight: .medium)
         /// 13/16 medium monospaced — every time readout.
         static let timecode = Font.system(.footnote, design: .monospaced).weight(.medium)
     }
