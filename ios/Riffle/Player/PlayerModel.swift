@@ -235,6 +235,13 @@ final class PlayerModel {
         player?.setFill(on)
     }
 
+    /// The Rotate button (iPhone): portrait ↔ landscape for this video, even with
+    /// the system's portrait lock on.
+    func rotate() {
+        Orientation.toggleRotation(locked: rotationLocked)
+        pokeChrome()
+    }
+
     func toggleRotationLock() {
         rotationLocked.toggle()
         rotationLocked ? Orientation.lockCurrent() : Orientation.unlock()

@@ -153,6 +153,10 @@ private struct PlayerControls: View {
                     .lineLimit(1)
             }
             Spacer(minLength: Riffle.Spacing.s2)
+            if Orientation.canRotate {
+                iconButton("rotate.right", label: landscape ? "Turn to portrait" : "Turn to landscape",
+                           action: player.rotate)
+            }
             Button(action: player.toggleRotationLock) {
                 Image(systemName: "lock.rotation")
                     .font(Riffle.Typography.headline)

@@ -39,6 +39,27 @@ enum Orientation {
         if playerOnScreen { request(.landscapeRight) } else { pendingLandscape = true }
     }
 
+    static var canRotate: Bool { !isPad }
+
+    /// Whether the interface is landscape right now.
+    static var isLandscape: Bool {
+        scene?.effectiveGeometry.interfaceOrientation.isLandscape ?? false
+    }
+
+    /// The Rotate button: turn between portrait and landscape for this video. A
+    /// geometry request turns the interface even with the system's portrait lock on,
+    /// and with that lock nothing turns it back until Rotate is tapped again.
+    /// With Rotation lock on, the lock moves to the new orientation.
+    static func toggleRotation(locked: Bool) {
+        guard canRotate else { return }
+        let target: UIInterfaceOrientationMask = isLandscape ? .portrait : .landscapeRight
+        if locked {
+            mask = target
+            apply()
+        }
+        request(target)
+    }
+
     /// Rotation lock: pin whatever orientation the interface is in now.
     static func lockCurrent() {
         guard let scene else { return }
