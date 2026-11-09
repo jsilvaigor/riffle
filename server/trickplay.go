@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -68,8 +69,21 @@ type trickQueue struct {
 	mu     sync.Mutex
 	cond   *sync.Cond
 	list   []string
+	low    []string // refreshes of thumbnails that still work: only when list is empty
 	queued map[string]bool
 	paused bool // workers wait; the queue keeps filling
+}
+
+// pushLow queues a refresh behind everything else.
+func (q *trickQueue) pushLow(id string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.queued[id] {
+		return
+	}
+	q.queued[id] = true
+	q.low = append(q.low, id)
+	q.cond.Signal()
 }
 
 func (q *trickQueue) setPaused(p bool) {
@@ -89,14 +103,12 @@ func (q *trickQueue) push(id string, front bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.queued[id] {
-		if !front {
+		if i := slices.Index(q.low, id); i >= 0 {
+			q.low = slices.Delete(q.low, i, i+1) // waiting as a refresh: promote it
+		} else if !front {
 			return
-		}
-		for i, v := range q.list {
-			if v == id {
-				q.list = append(q.list[:i], q.list[i+1:]...)
-				break
-			}
+		} else if i := slices.Index(q.list, id); i >= 0 {
+			q.list = slices.Delete(q.list, i, i+1)
 		}
 	}
 	q.queued[id] = true
@@ -111,14 +123,18 @@ func (q *trickQueue) push(id string, front bool) {
 func (q *trickQueue) pop(ctx context.Context) (string, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	for len(q.list) == 0 || q.paused {
+	for (len(q.list) == 0 && len(q.low) == 0) || q.paused {
 		if ctx.Err() != nil {
 			return "", false
 		}
 		q.cond.Wait()
 	}
-	id := q.list[0]
-	q.list = q.list[1:]
+	var id string
+	if len(q.list) > 0 {
+		id, q.list = q.list[0], q.list[1:]
+	} else {
+		id, q.low = q.low[0], q.low[1:]
+	}
 	delete(q.queued, id)
 	return id, true
 }
@@ -132,10 +148,13 @@ type Trickplay struct {
 	jobsMu sync.Mutex
 	jobs   []TrickJob      // newest first
 	active map[string]bool // items being generated right now (guarded by jobsMu)
+	// refreshing marks queued redos of thumbnails that still work (guarded by jobsMu).
+	refreshing map[string]bool
 }
 
 func NewTrickplay(cfg Config, lib *Library) *Trickplay {
-	return &Trickplay{cfg: cfg, lib: lib, q: newTrickQueue(), active: map[string]bool{}}
+	return &Trickplay{cfg: cfg, lib: lib, q: newTrickQueue(), active: map[string]bool{},
+		refreshing: map[string]bool{}}
 }
 
 func (t *Trickplay) Dir(id string) string {
@@ -147,10 +166,25 @@ func (t *Trickplay) Start(ctx context.Context) {
 	for i := 0; i < t.cfg.Workers; i++ {
 		go t.worker(ctx)
 	}
+	for _, id := range t.lib.takeOutdated() {
+		t.Refresh(id)
+	}
+}
+
+// Refresh redoes an item's thumbnails behind all other work, without taking the
+// current ones away: the item stays ready, and if the redo fails it keeps them.
+func (t *Trickplay) Refresh(id string) {
+	t.jobsMu.Lock()
+	t.refreshing[id] = true
+	t.jobsMu.Unlock()
+	t.q.pushLow(id)
 }
 
 // Enqueue schedules generation; priority puts it ahead of the background backlog.
 func (t *Trickplay) Enqueue(id string, priority bool) {
+	t.jobsMu.Lock()
+	delete(t.refreshing, id) // a real request now: normal success and failure rules
+	t.jobsMu.Unlock()
 	t.lib.SetTrickplay(id, TrickPending)
 	t.q.push(id, priority)
 }
@@ -168,13 +202,18 @@ func (t *Trickplay) worker(ctx context.Context) {
 		hw, err := t.generate(ctx, id)
 		t.jobsMu.Lock()
 		delete(t.active, id)
+		refresh := t.refreshing[id]
+		delete(t.refreshing, id)
 		t.jobsMu.Unlock()
 		if err != nil && ctx.Err() != nil {
 			return
 		}
 		job := TrickJob{ID: id, HWAccel: hw, Fallback: hw != t.cfg.HWAccel,
 			Millis: time.Since(start).Milliseconds(), At: time.Now().UTC()}
-		if err != nil {
+		if err != nil && refresh {
+			log.Printf("trickplay %s: refresh failed, keeping the current thumbnails: %v", id, err)
+			job.Error = err.Error()
+		} else if err != nil {
 			log.Printf("trickplay %s: %v", id, err)
 			job.Error = err.Error()
 			t.lib.setTrickErr(id, tail(err.Error(), 300))
@@ -212,14 +251,14 @@ func (t *Trickplay) Status() map[string]any {
 		counts[it.Trickplay]++
 	}
 	t.q.mu.Lock()
-	queued, paused := len(t.q.list), t.q.paused
+	queued, refreshes, paused := len(t.q.list)+len(t.q.low), len(t.q.low), t.q.paused
 	t.q.mu.Unlock()
 	t.jobsMu.Lock()
 	jobs := append([]TrickJob{}, t.jobs...)
 	t.jobsMu.Unlock()
 	return map[string]any{
 		"effectiveHWAccel": effective, "hwDisabled": t.hwBroken.Load(),
-		"queued": queued, "paused": paused, "items": counts, "recentJobs": jobs,
+		"queued": queued, "refreshes": refreshes, "paused": paused, "items": counts, "recentJobs": jobs,
 	}
 }
 

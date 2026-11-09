@@ -165,9 +165,9 @@ ffmpeg's `cropdetect` in the same pass that renders the sheets, over every decod
 and left out when the bands are under 2% of the frame, when less than half the frame
 would remain (dark footage rather than bands), and for rotated videos.
 
-`v` is the manifest version. Manifests from before crop detection (no `v`) are
-regenerated once, in the background, the first time the server starts after the upgrade;
-the log says how many.
+`v` is the manifest version. Thumbnails from before crop detection (no `v`) are redone
+once, in the background, after the upgrade: they stay available meanwhile, new videos go
+first, and if a redo fails the old thumbnails are kept. The log says how many.
 
 ### Admin dashboard
 
