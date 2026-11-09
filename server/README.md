@@ -147,13 +147,27 @@ The server decides each item's watch state, so the app and the dashboard agree:
 ### Trickplay manifest
 
 ```json
-{ "interval": 5, "tileWidth": 320, "tileHeight": 180, "columns": 10, "rows": 10,
-  "count": 1440, "sheets": 15, "format": "jpg" }
+{ "v": 2, "interval": 5, "tileWidth": 320, "tileHeight": 180, "columns": 10, "rows": 10,
+  "count": 1440, "sheets": 15, "format": "jpg",
+  "crop": { "x": 0, "y": 140, "w": 1920, "h": 800, "frameWidth": 1920, "frameHeight": 1080 } }
 ```
 
 Thumbnail `k` shows time `k * interval`. It's in sheet `k / (columns*rows)`, at cell
 `k % (columns*rows)` counting left to right, top to bottom. A 2-hour movie is about
 15 sheets, roughly 5-7 MB in total, so the app can prefetch all of them when a video opens.
+
+`crop` is present when the file has black bands baked into the frame, like a 2.40:1 film
+letterboxed in a 16:9 file or a 4:3 show pillarboxed. It's the picture area in the decoded
+frame's stored pixels (`frameWidth` × `frameHeight`, before non-square pixels are scaled),
+which is what mpv's `video-crop` takes. The tiles keep the whole frame, so scale the
+rectangle onto a tile to crop a preview; the poster is already cropped. It's measured with
+ffmpeg's `cropdetect` in the same pass that renders the sheets, over every decoded frame,
+and left out when the bands are under 2% of the frame, when less than half the frame
+would remain (dark footage rather than bands), and for rotated videos.
+
+`v` is the manifest version. Thumbnails from before crop detection (no `v`) are redone
+once, in the background, after the upgrade: they stay available meanwhile, new videos go
+first, and if a redo fails the old thumbnails are kept. The log says how many.
 
 ### Admin dashboard
 
@@ -221,7 +235,8 @@ Everything runs through the `Makefile` in `server/` (`make help` lists the targe
 ```sh
 make test          # gofmt, vet, race build, unit tests
 make media         # test videos in testdata/media: h264 mkv, hevc mp4, wmv2 wmv, short portrait,
-                   # phone portrait (rotation flag), anamorphic mkv; skips files that exist
+                   # phone portrait (rotation flag), anamorphic mkv, letterboxed mp4 (black
+                   # bands for crop detection); skips files that exist
 make dev           # run natively on CPU against testdata/media, token "dev"
 make build run     # same in Docker (docker-compose.yml), then `make logs` / `make stop`
 make diag          # call /api/diagnostics on localhost (URL= and TOKEN= to point elsewhere)

@@ -58,6 +58,8 @@ type Library struct {
 
 	statusMu sync.Mutex
 	status   ScanStatus
+
+	outdated []string // ready items whose manifests predate manifestVersion (see load)
 }
 
 // ScanStatus is reported by /api/diagnostics.
@@ -126,6 +128,7 @@ func (l *Library) load() {
 		log.Printf("library: ignoring corrupt index: %v", err)
 		return
 	}
+	missing := 0
 	for _, it := range items {
 		rp, ok := l.rootPath(it.Root)
 		if !ok {
@@ -136,13 +139,26 @@ func (l *Library) load() {
 			it.Trickplay = TrickNone // re-queued after the startup scan; failures retry once per start
 		}
 		if it.Trickplay == TrickReady {
-			if _, err := os.Stat(filepath.Join(l.cfg.DataDir, "trickplay", it.ID, "manifest.json")); err != nil {
-				it.Trickplay = TrickNone
+			switch exists, current := l.manifestState(it.ID); {
+			case !exists:
+				it.Trickplay = TrickNone // regenerate
+				missing++
+			case !current:
+				// Made by an older server (before crop detection). Keep serving these
+				// thumbnails; Trickplay.Start redoes them behind any new videos.
+				l.outdated = append(l.outdated, it.ID)
 			}
 		}
 		l.items[it.ID] = it
 	}
 	log.Printf("library: loaded %d items from index", len(l.items))
+	if missing > 0 {
+		log.Printf("library: %d items lost their thumbnails and get new ones", missing)
+	}
+	if len(l.outdated) > 0 {
+		log.Printf("library: %d items have thumbnails from before crop detection; they stay "+
+			"available and are redone in the background, after any new videos", len(l.outdated))
+	}
 }
 
 func (l *Library) save() {
@@ -347,6 +363,29 @@ func (l *Library) tilesStale(it *Item) bool {
 	want := float64(v.DisplayWidth) / float64(v.DisplayHeight)
 	got := float64(m.TileWidth) / float64(m.TileHeight)
 	return math.Abs(got-want)/want > 0.03 // tile heights are rounded to even pixels
+}
+
+// manifestState reports whether an item's trickplay manifest exists, and whether it
+// was written by this manifestVersion.
+func (l *Library) manifestState(id string) (exists, current bool) {
+	b, err := os.ReadFile(filepath.Join(l.cfg.DataDir, "trickplay", id, "manifest.json"))
+	if err != nil {
+		return false, false
+	}
+	var m Manifest
+	if json.Unmarshal(b, &m) != nil {
+		return false, false
+	}
+	return true, m.V >= manifestVersion
+}
+
+// takeOutdated returns (once) the items whose thumbnails predate manifestVersion.
+func (l *Library) takeOutdated() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	ids := l.outdated
+	l.outdated = nil
+	return ids
 }
 
 // Get returns the live item (callers must not mutate it without the lock).
