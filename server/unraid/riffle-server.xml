@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!--
+  Unraid Docker template for Riffle Server. Install it as described in
+  server/README.md ("Running on Unraid"). Values in <Config> elements are the
+  defaults filled into the form; everything matches the docker run example there.
+-->
+<Container version="2">
+  <Name>riffle-server</Name>
+  <Repository>registry.isilva.dev/riffle-server:latest</Repository>
+  <Registry>https://registry.isilva.dev</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/jsilvaigor/riffle/issues</Support>
+  <Project>https://github.com/jsilvaigor/riffle</Project>
+  <Overview>Companion server for the Riffle iOS player. Indexes your video folders, streams the original files with byte-range support (no transcoding), and pre-renders trickplay sheets so scrubbing previews are instant. Thumbnails are decoded on the NVIDIA GPU (Nvidia Driver plugin), the Intel iGPU, or the CPU. Keep App data on the SSD pool and mount media read-only.</Overview>
+  <Category>MediaServer:Video</Category>
+  <WebUI>http://[IP]:[PORT:8770]/admin/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/jsilvaigor/riffle/main/server/unraid/riffle-server.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/jsilvaigor/riffle/main/design/assets/AppIcon/app-icon.png</Icon>
+  <!-- NVIDIA thumbnail decoding. For the Intel iGPU or CPU only, clear this, and for the
+       iGPU set the Intel iGPU device below and Thumbnail decoder to vaapi. -->
+  <ExtraParams>--runtime=nvidia</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>The Nvidia Driver plugin, for NVIDIA thumbnail decoding (optional: the server falls back to the CPU).</Requires>
+
+  <Config Name="Port" Target="8770" Default="8770" Mode="tcp" Description="API, streaming and the admin dashboard (/admin/)." Type="Port" Display="always" Required="true" Mask="false">8770</Config>
+  <Config Name="App data" Target="/data" Default="/mnt/cache/appdata/riffle" Mode="rw" Description="Index, progress and thumbnail cache. Put it on the SSD pool so thumbnails stay fast while array disks are spun down." Type="Path" Display="always" Required="true" Mask="false">/mnt/cache/appdata/riffle</Config>
+  <Config Name="Movies" Target="/media/movies" Default="/mnt/user/Media/Movies" Mode="ro" Description="A media share, mounted read-only. Listed in Folders as Movies=/media/movies." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/Media/Movies</Config>
+  <Config Name="TV" Target="/media/tv" Default="/mnt/user/Media/TV" Mode="ro" Description="A media share, mounted read-only. Listed in Folders as TV=/media/tv. Add more paths the same way and list each in Folders." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/Media/TV</Config>
+  <Config Name="Folders" Target="RIFFLE_MEDIA" Default="Movies=/media/movies,TV=/media/tv" Mode="" Description="The folders to index and the names the app shows: Name=/container/path, separated by commas." Type="Variable" Display="always" Required="true" Mask="false">Movies=/media/movies,TV=/media/tv</Config>
+  <Config Name="Token" Target="RIFFLE_TOKEN" Default="" Mode="" Description="Shared secret the app and dashboard send. Empty leaves the API open to anyone on your network." Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="Thumbnail decoder" Target="RIFFLE_HWACCEL" Default="cuda|vaapi|none" Mode="" Description="cuda for NVIDIA (needs the runtime in Extra Parameters), vaapi for the Intel iGPU (needs the device below), none for the CPU." Type="Variable" Display="always" Required="true" Mask="false">cuda</Config>
+  <Config Name="NVIDIA visible devices" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="Which GPUs the container sees: all, or a GPU UUID from the Nvidia Driver plugin page." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
+  <Config Name="Intel iGPU" Target="/dev/dri" Default="" Mode="" Description="Set to /dev/dri to decode thumbnails on the Intel iGPU (Thumbnail decoder: vaapi)." Type="Device" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="Thumbnail interval" Target="RIFFLE_TRICKPLAY_INTERVAL" Default="5" Mode="" Description="Seconds between scrub thumbnails (short clips get finer spacing)." Type="Variable" Display="advanced" Required="false" Mask="false">5</Config>
+  <Config Name="Thumbnail width" Target="RIFFLE_TRICKPLAY_WIDTH" Default="320" Mode="" Description="Thumbnail width in pixels." Type="Variable" Display="advanced" Required="false" Mask="false">320</Config>
+  <Config Name="Thumbnail workers" Target="RIFFLE_TRICKPLAY_WORKERS" Default="1" Mode="" Description="Concurrent thumbnail jobs. Keep at 1 for the HDD array." Type="Variable" Display="advanced" Required="false" Mask="false">1</Config>
+  <Config Name="Accurate thumbnails" Target="RIFFLE_TRICKPLAY_ACCURATE" Default="false|true" Mode="" Description="true decodes every frame for exact thumbnails (much slower); false uses keyframes." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="Rescan interval" Target="RIFFLE_SCAN_MINUTES" Default="30" Mode="" Description="Minutes between library rescans; 0 disables." Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
+</Container>

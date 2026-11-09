@@ -27,7 +27,7 @@ the top priority. Two parts:
 | Scrub previews | Pre-rendered trickplay sheets, keyframes only, NVDEC with CPU fallback | Previews need zero network while dragging; a 12-min 720p file takes ~1.6 s on CPU |
 | Server language | Go, standard library only | Single static binary, good HTTP stack, easy Docker image |
 | Server state | JSON files in `/data` (SSD) | Fine for a personal library; no database dependency |
-| Discovery | Manual address for now; Bonjour later | Bonjour needs a third-party Go library |
+| Discovery | Manual address | Entered once; Bonjour would need a third-party Go library |
 | Remote access | Tailscale/WireGuard, no open ports | Safer than exposing the server |
 | Player orientation | Follows the video: portrait plays portrait; only wide videos request landscape, once | Portrait phone clips must not be forced sideways. The server reports display size after rotation, so the app decides before the first frame (`design/player.md`) |
 
@@ -54,6 +54,7 @@ the top priority. Two parts:
   actions, problems list, hardware tests
 - [x] Server: watch states (`unwatched`/`partial`/`watched`, sticky, mark and unmark,
   `finishedAt`) decided server-side for the app's counters; dashboard filters and counts
-- [ ] Server: Bonjour advertisement, Unraid template XML
+- [x] Server: Unraid template (`server/unraid/riffle-server.xml`). Bonjour dropped: the
+  address is entered once in the app
 - [x] Server: rotation and display size in item metadata, for player orientation
 - [ ] iOS app: project setup with MPVKit, library browser, player, custom scrub bar
