@@ -59,4 +59,6 @@ the top priority. Two parts:
 - [x] iOS app: Xcode project, connect screen, library browser, detail, search, settings
 - [x] iOS app: MPVKit player, custom scrub bar with trickplay, gestures, orientation,
   track sheet, progress reporting
+- [x] Server + iOS: baked-in black bands detected during trickplay (`cropdetect`) and
+  cropped in the player, previews and posters
 - [ ] iOS app: Picture in Picture, AirPlay remote mode; verify on a device

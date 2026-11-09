@@ -164,4 +164,20 @@ struct TrickplayManifest: Codable, Hashable, Sendable {
     var count: Int
     var sheets: Int
     var format: String
+    /// The picture area when the file has black bands baked in; nil when it has none.
+    var crop: TrickplayCrop?
+}
+
+/// A rectangle in the decoded frame's stored pixels (`frameWidth` × `frameHeight`),
+/// the space mpv's `video-crop` uses. The tiles show the whole frame.
+struct TrickplayCrop: Codable, Hashable, Sendable {
+    var x: Int
+    var y: Int
+    var w: Int
+    var h: Int
+    var frameWidth: Int
+    var frameHeight: Int
+
+    /// mpv's `video-crop` syntax: `WxH+X+Y`.
+    var mpvValue: String { "\(w)x\(h)+\(x)+\(y)" }
 }

@@ -81,7 +81,18 @@ func makePoster(dir, path string) error {
 		return fmt.Errorf("decoding sheet: %w", err)
 	}
 	x, y := (cell%m.Columns)*m.TileWidth, (cell/m.Columns)*m.TileHeight
-	rect := image.Rect(x, y, x+m.TileWidth, y+m.TileHeight).Add(img.Bounds().Min)
+	rect := image.Rect(x, y, x+m.TileWidth, y+m.TileHeight)
+	if c := m.Crop; c != nil && c.FrameWidth > 0 && c.FrameHeight > 0 {
+		// Tiles show the whole frame; leave the baked-in black bands off the poster.
+		sx := float64(m.TileWidth) / float64(c.FrameWidth)
+		sy := float64(m.TileHeight) / float64(c.FrameHeight)
+		// Rounded inwards so no sliver of band is left at the edges.
+		rect = image.Rect(
+			x+int(math.Ceil(float64(c.X)*sx)), y+int(math.Ceil(float64(c.Y)*sy)),
+			x+int(math.Floor(float64(c.X+c.W)*sx)), y+int(math.Floor(float64(c.Y+c.H)*sy)),
+		)
+	}
+	rect = rect.Add(img.Bounds().Min)
 	sub, ok := img.(interface {
 		SubImage(image.Rectangle) image.Image
 	})

@@ -19,6 +19,7 @@ Riffle never forces a video into an orientation it wasn't shot in. **A portrait 
 - **Rotation lock** in the top bar pins the current orientation until the player closes. It works alongside the system's portrait lock; when the system lock is on, the landscape request still applies because the person opened a wide video, but nothing rotates after that.
 - **iPad** never requests a rotation; the player fits whatever way the iPad is held.
 - **Closing the player** returns to the library in the orientation the library was in (portrait on iPhone).
+- **Baked-in black bands** (a 2.40:1 film letterboxed in a 16:9 file, a 4:3 show pillarboxed) are cropped off automatically, so the picture itself is what fits the screen. Riffle Server measures them while making trickplay (the manifest's `crop`); the scrub previews and posters are cropped the same way.
 - **Fit and fill:** pinch out to fill the screen (cropping the edges), pinch in to fit the whole frame. Fit is the default for every video and every orientation; the choice lasts until the player closes.
 - Thumbnails and trickplay previews are already upright (the server's ffmpeg applies the rotation), so a portrait video's previews are 9:16 and the Scrubber's preview frame is 90 × 160.
 

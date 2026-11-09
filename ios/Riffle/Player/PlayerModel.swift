@@ -140,8 +140,11 @@ final class PlayerModel {
             try? await Task.sleep(for: .milliseconds(400))
             self?.showSpinner = true
         })
-        tasks.append(Task { [trickplay, request] in
-            await trickplay.load(itemID: request.item.id, client: client)
+        tasks.append(Task { [weak self, trickplay, request] in
+            await trickplay.load(itemID: request.item.id, client: client) { manifest in
+                // Baked-in black bands: crop them so the picture fills the screen.
+                if let crop = manifest.crop { self?.player?.setCrop(crop.mpvValue) }
+            }
         })
         // Resume position every 10 seconds while playing (player.md).
         tasks.append(Task { [weak self] in

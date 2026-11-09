@@ -21,6 +21,9 @@ import (
 // Thumbnail k (0-based) shows time k*Interval and lives in sheet k/(Columns*Rows)
 // at cell k%(Columns*Rows), read left-to-right, top-to-bottom.
 type Manifest struct {
+	// V is manifestVersion when written. Older manifests (no crop detection) are
+	// regenerated once at startup.
+	V          int     `json:"v"`
 	Interval   float64 `json:"interval"`
 	TileWidth  int     `json:"tileWidth"`
 	TileHeight int     `json:"tileHeight"`
@@ -29,7 +32,25 @@ type Manifest struct {
 	Count      int     `json:"count"`
 	Sheets     int     `json:"sheets"`
 	Format     string  `json:"format"`
+	// Crop is the picture area when the file has black bands baked into the frame
+	// (letterboxed films in a 16:9 file, pillarboxed 4:3). Absent when there are none.
+	Crop *Crop `json:"crop,omitempty"`
 }
+
+// Crop is a rectangle in the stored pixels of the decoded frame (before scaling for
+// non-square pixels), the same space as mpv's video-crop. FrameWidth and FrameHeight
+// are that frame's size, so clients can scale the rectangle onto a tile.
+type Crop struct {
+	X           int `json:"x"`
+	Y           int `json:"y"`
+	W           int `json:"w"`
+	H           int `json:"h"`
+	FrameWidth  int `json:"frameWidth"`
+	FrameHeight int `json:"frameHeight"`
+}
+
+// manifestVersion 2 added crop detection.
+const manifestVersion = 2
 
 const (
 	sheetCols = 10
@@ -232,14 +253,17 @@ func (t *Trickplay) generate(ctx context.Context, id string) (string, error) {
 	// render fills tmp with sheets. errNoSheets means ffmpeg exited cleanly with no
 	// frames to tile (ffmpeg 5.x does this when keyframe-only decoding finds too few
 	// frames; newer versions exit with an error instead).
+	var crop *Crop
 	render := func(hw string, accurate bool) error {
 		os.RemoveAll(tmp)
 		if err := os.MkdirAll(tmp, 0o755); err != nil {
 			return err
 		}
-		if err := t.runFFmpeg(ctx, hw, abs, probe.Video.Index, interval, accurate, tmp); err != nil {
+		c, err := t.runFFmpeg(ctx, hw, abs, probe.Video, interval, accurate, tmp)
+		if err != nil {
 			return err
 		}
+		crop = c
 		if sheets, _ := filepath.Glob(filepath.Join(tmp, "*.jpg")); len(sheets) == 0 {
 			return errNoSheets
 		}
@@ -286,7 +310,7 @@ func (t *Trickplay) generate(ctx context.Context, id string) (string, error) {
 		count = len(sheets) * perSheet
 	}
 	m := Manifest{
-		Interval: interval, TileWidth: cfgImg.Width / sheetCols, TileHeight: cfgImg.Height / sheetRows,
+		V: manifestVersion, Crop: crop, Interval: interval, TileWidth: cfgImg.Width / sheetCols, TileHeight: cfgImg.Height / sheetRows,
 		Columns: sheetCols, Rows: sheetRows, Count: count, Sheets: len(sheets), Format: "jpg",
 	}
 	b, _ := json.MarshalIndent(m, "", "  ")
@@ -299,11 +323,12 @@ func (t *Trickplay) generate(ctx context.Context, id string) (string, error) {
 
 var errNoSheets = errors.New("ffmpeg produced no sheets")
 
-func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, interval float64,
-	accurate bool, outDir string) error {
+func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, video *VideoStream, interval float64,
+	accurate bool, outDir string) (*Crop, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
-	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y"}
+	// Info level for cropdetect's per-frame report; -nostats keeps the progress line out.
+	args := []string{"-hide_banner", "-loglevel", "info", "-nostats", "-nostdin", "-y"}
 	switch hw {
 	case "cuda":
 		args = append(args, "-hwaccel", "cuda")
@@ -317,10 +342,14 @@ func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, i
 	}
 	args = append(args,
 		"-i", src,
-		"-map", fmt.Sprintf("0:%d", stream), "-an", "-sn", "-dn",
+		"-map", fmt.Sprintf("0:%d", video.Index), "-an", "-sn", "-dn",
+		// cropdetect sees every decoded frame and, with reset=0, reports the union of
+		// the picture area so far: the last report covers the whole video. It only
+		// measures; the tiles keep the full frame.
 		// The height follows the display aspect ratio (dar), so non-square pixels
 		// (anamorphic DVD rips) give correctly shaped tiles; setsar=1 marks them square.
-		"-vf", fmt.Sprintf("fps=%.6f,scale=%d:trunc(ow/dar/2)*2:flags=bilinear,setsar=1,tile=%dx%d",
+		"-vf", fmt.Sprintf("cropdetect=limit=0.094:round=2:reset=0,fps=%.6f,"+
+			"scale=%d:trunc(ow/dar/2)*2:flags=bilinear,setsar=1,tile=%dx%d",
 			1/interval, t.cfg.TileWidth, sheetCols, sheetRows),
 		"-q:v", "5", "-start_number", "0",
 		filepath.Join(outDir, "%03d.jpg"),
@@ -329,9 +358,51 @@ func (t *Trickplay) runFFmpeg(ctx context.Context, hw, src string, stream int, i
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%v: %s", err, tail(stderr.String(), 500))
+		return nil, fmt.Errorf("%v: %s", err, tail(withoutCropdetect(stderr.String()), 500))
 	}
-	return nil
+	return detectCrop(stderr.String(), video), nil
+}
+
+// detectCrop turns cropdetect's last report into a Crop, or nil when the bands are
+// negligible or the result isn't believable (a mostly dark video). Rotated videos
+// are skipped: ffmpeg measures them after rotating, mpv crops before.
+func detectCrop(log string, v *VideoStream) *Crop {
+	if v == nil || v.Rotation != 0 || v.Width <= 0 || v.Height <= 0 {
+		return nil
+	}
+	i := strings.LastIndex(log, "crop=")
+	if i < 0 {
+		return nil
+	}
+	var w, h, x, y int
+	if n, _ := fmt.Sscanf(log[i:], "crop=%d:%d:%d:%d", &w, &h, &x, &y); n != 4 {
+		return nil
+	}
+	if w <= 0 || h <= 0 || x < 0 || y < 0 || x+w > v.Width || y+h > v.Height {
+		return nil
+	}
+	// Less than half the frame left: more likely dark footage than bands.
+	if w*2 < v.Width || h*2 < v.Height {
+		return nil
+	}
+	// Under 2% off each dimension is encoder edge noise, not bands.
+	if float64(v.Width-w) < 0.02*float64(v.Width) && float64(v.Height-h) < 0.02*float64(v.Height) {
+		return nil
+	}
+	return &Crop{X: x, Y: y, W: w, H: h, FrameWidth: v.Width, FrameHeight: v.Height}
+}
+
+// withoutCropdetect drops cropdetect's per-frame lines so error messages show the
+// actual failure.
+func withoutCropdetect(s string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(s, "\n") {
+		if !strings.Contains(line, "cropdetect") {
+			b.WriteString(line)
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
 }
 
 // Admin actions. Each one leaves the library and queue consistent with the files on

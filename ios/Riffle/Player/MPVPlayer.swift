@@ -122,6 +122,8 @@ final class MPVPlayer: @unchecked Sendable {
     func setSpeed(_ speed: Double) { set("speed", String(format: "%.2f", speed)) }
     /// 0 fits the whole frame, 1 fills the screen (cropping).
     func setFill(_ fill: Bool) { set("panscan", fill ? "1.0" : "0.0") }
+    /// Crops the decoded frame (`WxH+X+Y`), for black bands baked into the file.
+    func setCrop(_ value: String) { set("video-crop", value) }
     func setAudioTrack(_ id: String) { set("aid", id) }
     func setSubtitleTrack(_ id: String) { set("sid", id) }
 

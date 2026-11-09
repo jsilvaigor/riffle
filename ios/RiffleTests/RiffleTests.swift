@@ -162,3 +162,37 @@ struct LibraryTreeTests {
         #expect(roots[1].count == 0)
     }
 }
+
+struct CropTests {
+    // 2.40:1 film letterboxed in a 1920x1080 frame; 320x180 tiles.
+    let crop = TrickplayCrop(x: 0, y: 140, w: 1920, h: 800, frameWidth: 1920, frameHeight: 1080)
+    var manifest: TrickplayManifest {
+        TrickplayManifest(interval: 5, tileWidth: 320, tileHeight: 180, columns: 10, rows: 10,
+                          count: 100, sheets: 1, format: "jpg", crop: crop)
+    }
+
+    @Test func decodesFromManifest() throws {
+        let json = #"{"v":2,"interval":5,"tileWidth":320,"tileHeight":180,"columns":10,"rows":10,"count":1,"sheets":1,"format":"jpg","crop":{"x":0,"y":140,"w":1920,"h":800,"frameWidth":1920,"frameHeight":1080}}"#
+        let m = try RiffleClient.decoder.decode(TrickplayManifest.self, from: Data(json.utf8))
+        #expect(m.crop == crop)
+        #expect(m.crop?.mpvValue == "1920x800+0+140")
+    }
+
+    @Test func manifestWithoutCrop() throws {
+        let json = #"{"interval":5,"tileWidth":320,"tileHeight":180,"columns":10,"rows":10,"count":1,"sheets":1,"format":"jpg"}"#
+        let m = try RiffleClient.decoder.decode(TrickplayManifest.self, from: Data(json.utf8))
+        #expect(m.crop == nil)
+        #expect(m.previewAspect == 320.0 / 180.0)
+    }
+
+    @Test func cellLeavesBandsOff() {
+        // Cell 11: row 1, column 1. Bands are 140/1080 of 180 px ≈ 23.3 px top and
+        // bottom, rounded inwards.
+        let c = manifest.cell(at: 55)
+        #expect(c?.rect == CGRect(x: 320, y: 180 + 24, width: 320, height: 132))
+    }
+
+    @Test func previewAspectIsTheFilm() {
+        #expect(abs((manifest.previewAspect ?? 0) - 2.4) < 0.01)
+    }
+}

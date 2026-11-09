@@ -17,8 +17,7 @@ final class TrickplayStore {
 
     /// Preview shape before any cell arrives: tile size, else the video's aspect.
     func aspect(fallback: Double?) -> Double {
-        if let m = manifest, m.tileHeight > 0 { return Double(m.tileWidth) / Double(m.tileHeight) }
-        return fallback ?? 16 / 9
+        manifest?.previewAspect ?? fallback ?? 16 / 9
     }
 
     /// The thumbnail nearest to `seconds`, or nil while its sheet is still loading.
@@ -33,13 +32,15 @@ final class TrickplayStore {
         return img
     }
 
-    func load(itemID: String, client: RiffleClient) async {
+    /// `onManifest` runs as soon as the manifest arrives, before the sheets.
+    func load(itemID: String, client: RiffleClient, onManifest: (TrickplayManifest) -> Void = { _ in }) async {
         // 202 means the server moved this item up its queue; retry as it says.
         while !Task.isCancelled {
             do {
                 switch try await client.trickplayManifest(itemID) {
                 case .ready(let m):
                     manifest = m
+                    onManifest(m)
                     await loadSheets(itemID: itemID, manifest: m, client: client)
                     return
                 case .pending(let retry):
