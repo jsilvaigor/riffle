@@ -99,8 +99,9 @@ All endpoints except `/api/health` require the token, sent as `Authorization: Be
 | `GET /api/items/{id}/poster.jpg` | Still for the library screen: the trickplay tile 10% into the video (tile size, 320 px wide by default). 202 + `Retry-After` until trickplay is ready (doesn't jump the queue); 404 if unavailable |
 | `GET /api/items/{id}/trickplay/manifest.json` | 200 manifest; 202 + `Retry-After` while generating (jumps the queue); 404 if unavailable |
 | `GET /api/items/{id}/trickplay/{n}.jpg` | Sheet `n` (0-based) |
-| `GET /api/progress` | All resume positions (gzip and `ETag` like the library) |
-| `PUT /api/items/{id}/progress` | `{"position": 123.4, "duration": 5400}` |
+| `GET /api/progress` | Every item's resume position and watch state, `{id: progress}` (gzip and `ETag` like the library). Items missing from it are unwatched |
+| `PUT /api/items/{id}/progress` | `{"position": 123.4, "duration": 5400}` while playing; `{"watched": true}` / `{"watched": false}` to mark. Returns the entry |
+| `DELETE /api/items/{id}/progress` | Mark unwatched (removes the entry), 204 |
 
 ### Video metadata
 
@@ -118,6 +119,30 @@ and an anamorphic DVD rip 16:9 ones. Items indexed by an older server are re-pro
 the next scan (`probe.v` tracks this, and the log and `/api/diagnostics` count them as
 `reprobe`); their thumbnails are kept unless the tiles don't match the display shape, as
 with anamorphic videos thumbnailed before 0.2.2.
+
+### Watch state
+
+The server decides each item's watch state, so the app and the dashboard agree:
+
+```json
+{ "position": 5300, "duration": 5400, "updatedAt": "2026-11-08T20:00:00Z",
+  "state": "watched", "watched": true, "finishedAt": "2026-11-08T20:00:00Z", "timesFinished": 1 }
+```
+
+- `state` is `unwatched`, `partial` or `watched`, from the position:
+  - **watched** within the last 5% of the video, or the last 2 minutes of one that's 10
+    minutes or longer (end credits don't leave a film in progress)
+  - **partial** past 30 seconds (10% for clips under 5 minutes)
+  - **unwatched** before that, or with no entry at all
+- **Watched is sticky:** playing a watched video again updates `position` (for resuming)
+  but keeps it watched until it's marked unwatched.
+- `{"watched": true}` marks it watched and resets `position` to 0, so it plays from the
+  start; `{"watched": false}` or `DELETE` removes the entry.
+- `finishedAt` is the last time it became watched; `timesFinished` counts those.
+- Send `duration` as 0 if the player doesn't know it yet; the server uses the probe's.
+- Counts per folder are the client's job: group `GET /api/library` items by folder and
+  look each one up in `GET /api/progress`. The dashboard's library page shows the same
+  counts for comparison.
 
 ### Trickplay manifest
 

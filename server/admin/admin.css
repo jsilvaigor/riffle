@@ -106,7 +106,7 @@ header nav a[aria-current="page"] { color: var(--ink); background: var(--surface
 .thumb img:not(.missing) + .note { display: none; }
 .thumb .dur { position: absolute; right: 6px; bottom: 6px; background: var(--scrim, rgba(0,0,0,.6));
   font-size: 12px; padding: 1px 6px; border-radius: 4px; font-variant-numeric: tabular-nums; }
-.thumb .watched { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--citron); }
+.thumb .watched { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--citron); }
 .tile .meta { padding: 9px 11px 11px; display: grid; gap: 2px; min-width: 0; }
 .tile .title { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile .sub { color: var(--ink-muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis;
@@ -233,3 +233,10 @@ a.tile { text-decoration: none; }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .tile .meta { padding: 8px 9px 9px; }
 }
+
+/* Watched chip: same shape as the duration chip, a glyph and a word (not a badge). */
+.thumb .done { position: absolute; left: 6px; bottom: 6px; background: var(--scrim, rgba(0,0,0,.6));
+  font-size: 12px; padding: 1px 6px 1px 4px; border-radius: 4px; display: inline-flex;
+  align-items: center; gap: 3px; }
+.thumb .done .icon { width: 13px; height: 13px; }
+.browse-head .count.watch { font-size: 13px; }

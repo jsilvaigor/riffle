@@ -28,12 +28,6 @@ var mimeTypes = map[string]string{
 	".3gp": "video/3gpp", ".ogv": "video/ogg",
 }
 
-type Progress struct {
-	Position  float64   `json:"position"`
-	Duration  float64   `json:"duration"`
-	UpdatedAt time.Time `json:"updatedAt"`
-}
-
 type Server struct {
 	cfg   Config
 	lib   *Library
@@ -48,7 +42,7 @@ func NewServer(cfg Config, lib *Library, trick *Trickplay) *Server {
 	s := &Server{cfg: cfg, lib: lib, trick: trick, progress: map[string]Progress{},
 		progPath: filepath.Join(cfg.DataDir, "progress.json")}
 	if b, err := os.ReadFile(s.progPath); err == nil {
-		json.Unmarshal(b, &s.progress)
+		s.loadProgress(b)
 	}
 	return s
 }
@@ -67,6 +61,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/items/{id}/trickplay/{n}", s.auth(s.trickSheet))
 	mux.HandleFunc("GET /api/progress", s.auth(s.allProgress))
 	mux.HandleFunc("PUT /api/items/{id}/progress", s.auth(s.putProgress))
+	mux.HandleFunc("DELETE /api/items/{id}/progress", s.auth(s.deleteProgress))
 	s.adminRoutes(mux)
 	return logRequests(mux)
 }
@@ -271,38 +266,6 @@ func (s *Server) trickSheet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "private, max-age=86400")
 	http.ServeFile(w, r, path)
-}
-
-func (s *Server) allProgress(w http.ResponseWriter, r *http.Request) {
-	s.progMu.Lock()
-	cp := make(map[string]Progress, len(s.progress))
-	for k, v := range s.progress {
-		cp[k] = v
-	}
-	s.progMu.Unlock()
-	writeJSONCached(w, r, cp)
-}
-
-func (s *Server) putProgress(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := s.lookup(w, r); !ok {
-		return
-	}
-	var p Progress
-	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&p); err != nil {
-		httpError(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-	p.UpdatedAt = time.Now().UTC()
-	s.progMu.Lock()
-	s.progress[r.PathValue("id")] = p
-	b, _ := json.Marshal(s.progress)
-	err := writeFileAtomic(s.progPath, b)
-	s.progMu.Unlock()
-	if err != nil {
-		httpError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, p)
 }
 
 type statusRecorder struct {

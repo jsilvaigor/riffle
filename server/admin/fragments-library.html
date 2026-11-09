@@ -25,6 +25,7 @@
       {{- if .Searching}}{{.Total}} match{{if ne .Total 1}}es{{end}} in this folder and its subfolders
       {{- else}}{{with len .Subfolders}}{{.}} folder{{if ne . 1}}s{{end}} · {{end}}{{.Total}} video{{if ne .Total 1}}s{{end}}{{end -}}
     </p>
+    {{with .Watch}}<p class="count watch">Here and below: {{.Watched}} watched · {{.Partial}} in progress · {{.Unwatched}} unwatched</p>{{end}}
   </div>
   {{if or .Subfolders .Cards}}
     <ul class="grid">
@@ -68,6 +69,7 @@
       <img data-src="/api/items/{{.ID}}/poster.jpg" alt="" loading="lazy" class="missing">
       <span class="note">{{if .ProbeErr}}{{icon "alert"}}Can't read this file{{else if eq .Trickplay "failed"}}{{icon "film"}}No preview{{else if eq .Trickplay "ready"}}{{icon "film"}}Loading…{{else}}{{icon "film"}}Preview not ready{{end}}</span>
       {{if .Duration}}<span class="dur">{{timecode .Duration}}</span>{{end}}
+      {{if .Done}}<span class="done">{{icon "check"}} Watched</span>{{end}}
       {{if .Watched}}<span class="watched" style="width: {{.Watched}}%"></span>{{end}}
     </div>
     <div class="meta">
@@ -146,7 +148,13 @@
       {{end}}
       <dt>Thumbnails</dt>
       <dd>{{if eq $it.Trickplay "failed"}}<span class="alert">{{icon "alert"}} Failed</span>{{else if eq $it.Trickplay "none"}}pending{{else}}{{$it.Trickplay}}{{end}}</dd>
-      {{with .Progress}}<dt>Watched to</dt><dd>{{timecode .Position}} <span class="muted">{{ago .UpdatedAt}}</span></dd>{{end}}
+      <dt>Watch state</dt>
+      <dd>{{with .Progress}}{{if eq .State "watched"}}{{icon "check"}} Watched{{else if eq .State "partial"}}In progress{{else}}Unwatched{{end}}{{else}}Unwatched{{end}}</dd>
+      {{with .Progress}}
+        {{if .Position}}<dt>Resume at</dt><dd>{{timecode .Position}} <span class="muted">{{ago .UpdatedAt}}</span></dd>{{end}}
+        {{with .FinishedAt}}<dt>Last finished</dt><dd>{{.Format "2 Jan 2006 15:04"}}</dd>{{end}}
+        {{if gt .TimesFinished 1}}<dt>Finished</dt><dd>{{.TimesFinished}} times</dd>{{end}}
+      {{end}}
     </dl>
     {{with $it.Probe}}
       {{if .Audio}}<h2 style="margin-top:16px">Audio</h2>
@@ -159,6 +167,11 @@
     <div class="actions">
       <button hx-post="/admin/a/items/{{$it.ID}}/thumbnails" hx-target="#toast" hx-disabled-elt="this">{{icon "film"}} Rebuild thumbnails</button>
       <button hx-post="/admin/a/items/{{$it.ID}}/reprobe" hx-target="#toast" hx-disabled-elt="this">{{icon "search"}} Re-probe</button>
+      {{if and .Progress (eq .Progress.State "watched")}}
+        <button hx-post="/admin/a/items/{{$it.ID}}/unwatched" hx-target="#toast" hx-disabled-elt="this">{{icon "replay"}} Mark as unwatched</button>
+      {{else}}
+        <button hx-post="/admin/a/items/{{$it.ID}}/watched" hx-target="#toast" hx-disabled-elt="this">{{icon "check"}} Mark as watched</button>
+      {{end}}
     </div>
   </div>
 </div>

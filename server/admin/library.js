@@ -172,7 +172,15 @@ dialog.addEventListener("close", () => {
 // The first one opens the linked folder (and item); later ones reload the current folder.
 let started = false;
 document.body.addEventListener("refresh", () => {
-  if (started) { browse(folderInput.value); return; }
+  if (started) {
+    browse(folderInput.value);
+    // An action from the item view (e.g. Mark as watched): show its new state.
+    const open = hashParams().get("item");
+    if (dialog.open && open && /^[0-9a-f]+$/.test(open)) {
+      htmx.ajax("GET", "/admin/f/item/" + open, { target: dialog });
+    }
+    return;
+  }
   started = true;
   const p = hashParams();
   browse(p.get("folder") || "");

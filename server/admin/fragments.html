@@ -21,7 +21,8 @@
     <dl>
       <dt>Size</dt><dd>{{bytes .Size}}</dd>
       <dt>Running time</dt><dd>{{dur .Duration}}</dd>
-      <dt>Resume positions</dt><dd>{{.Progress}}</dd>
+      <dt>Watched</dt><dd>{{.Watch.Watched}}</dd>
+      <dt>In progress</dt><dd>{{.Watch.Partial}}</dd>
     </dl>
     {{range .Roots}}
       <p class="root"><span>{{.Name}}</span> <span class="muted">{{.Count}} videos</span>
