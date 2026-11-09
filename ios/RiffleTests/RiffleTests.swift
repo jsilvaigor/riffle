@@ -196,3 +196,35 @@ struct CropTests {
         #expect(abs((manifest.previewAspect ?? 0) - 2.4) < 0.01)
     }
 }
+
+struct WatchStateTests {
+    @Test func decodesServerEntry() throws {
+        let json = #"{"a":{"position":5300,"duration":5400,"updatedAt":"2026-11-08T20:00:00Z","state":"watched","watched":true,"finishedAt":"2026-11-08T20:00:00Z","timesFinished":2},"b":{"position":600,"duration":5400,"state":"partial"},"c":{"position":3,"duration":60,"state":"bogus"}}"#
+        let p = try RiffleClient.decoder.decode([String: WatchProgress].self, from: Data(json.utf8))
+        #expect(p["a"]?.state == .watched)
+        #expect(p["a"]?.timesFinished == 2)
+        #expect(p["a"]?.isInProgress == false)
+        #expect(p["b"]?.state == .partial)
+        #expect(p["b"]?.isInProgress == true)
+        #expect(p["c"]?.state == .unwatched)
+    }
+
+    @Test func olderServerWithoutState() throws {
+        let json = #"{"position":120,"duration":5400}"#
+        let p = try RiffleClient.decoder.decode(WatchProgress.self, from: Data(json.utf8))
+        #expect(p.state == .partial)
+    }
+
+    @Test func rewatchingAWatchedVideoIsInProgress() {
+        let p = WatchProgress(position: 900, duration: 5400, state: .watched)
+        #expect(p.isInProgress)
+    }
+
+    @Test func summaries() {
+        #expect(WatchCounts(watched: 14, partial: 2, unwatched: 8).summary == "14 watched · 2 in progress · 8 not watched")
+        #expect(WatchCounts(watched: 3, partial: 0, unwatched: 1).summary == "3 watched · 1 not watched")
+        #expect(WatchCounts(watched: 5).summary == "All watched")
+        #expect(WatchCounts(unwatched: 5).summary == "Not watched")
+        #expect(WatchCounts().summary == "No videos")
+    }
+}

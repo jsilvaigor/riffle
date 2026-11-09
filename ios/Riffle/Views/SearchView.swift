@@ -21,6 +21,7 @@ struct SearchView: View {
                     NavigationLink(value: item) {
                         VideoRowView(item: item, progress: model.progress[item.id])
                     }
+                    .watchedMenu(item.id)
                     .riffleRow()
                 }
             }

@@ -71,11 +71,15 @@ struct LibraryView: View {
                         FolderContents(folder: root)
                     } else {
                         ForEach(model.roots) { root in
-                            NavigationLink(value: root) { FolderRowView(folder: root) }.riffleRow()
+                            NavigationLink(value: root) { FolderRowView(folder: root, counts: model.counts(root)) }.riffleRow()
                         }
                     }
                 } header: {
-                    SectionHeader(model.roots.count == 1 ? model.roots[0].name : "Folders")
+                    if model.roots.count == 1, let root = model.roots.first {
+                        SectionHeader(root.name, caption: model.counts(root).summary)
+                    } else {
+                        SectionHeader("Folders")
+                    }
                 }
             }
             .listStyle(.plain)
@@ -97,6 +101,7 @@ struct ContinueWatchingShelf: View {
                             .frame(width: sizeClass == .regular ? 300 : 240)
                     }
                     .buttonStyle(.plain)
+                    .watchedMenu(item.id)
                 }
             }
             .padding(.horizontal, Riffle.Spacing.s4)
@@ -117,10 +122,11 @@ struct FolderContents: View {
 
     var body: some View {
         ForEach(folder.folders) { sub in
-            NavigationLink(value: sub) { FolderRowView(folder: sub) }.riffleRow()
+            NavigationLink(value: sub) { FolderRowView(folder: sub, counts: model.counts(sub)) }.riffleRow()
         }
         ForEach(folder.videos) { item in
             NavigationLink(value: item) { VideoRowView(item: item, progress: model.progress[item.id]) }
+                .watchedMenu(item.id)
                 .riffleRow()
         }
     }
@@ -140,15 +146,46 @@ struct FolderView: View {
 
 struct SectionHeader: View {
     var title: String
-    init(_ title: String) { self.title = title }
+    var caption: String?
+    init(_ title: String, caption: String? = nil) {
+        self.title = title
+        self.caption = caption
+    }
 
     var body: some View {
-        Text(title)
-            .font(Riffle.Typography.title)
-            .foregroundStyle(Riffle.Palette.ink)
-            .textCase(nil)
-            .padding(.top, Riffle.Spacing.s2)
+        VStack(alignment: .leading, spacing: Riffle.Spacing.s1) {
+            Text(title)
+                .font(Riffle.Typography.title)
+                .foregroundStyle(Riffle.Palette.ink)
+            if let caption {
+                Text(caption)
+                    .font(Riffle.Typography.caption)
+                    .foregroundStyle(Riffle.Palette.inkMuted)
+            }
+        }
+        .textCase(nil)
+        .padding(.top, Riffle.Spacing.s2)
     }
+}
+
+/// Long press on a video: mark it watched or unwatched.
+private struct WatchedMenu: ViewModifier {
+    @Environment(AppModel.self) private var model
+    var id: String
+
+    func body(content: Content) -> some View {
+        content.contextMenu {
+            if model.state(id) == .watched {
+                Button("Mark as unwatched", systemImage: "circle") { Task { await model.setWatched(id, false) } }
+            } else {
+                Button("Mark as watched", systemImage: "checkmark.circle") { Task { await model.setWatched(id, true) } }
+            }
+        }
+    }
+}
+
+extension View {
+    func watchedMenu(_ id: String) -> some View { modifier(WatchedMenu(id: id)) }
 }
 
 extension View {

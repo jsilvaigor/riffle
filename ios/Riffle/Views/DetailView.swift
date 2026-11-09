@@ -16,7 +16,7 @@ struct DetailView: View {
             VStack(alignment: .leading, spacing: Riffle.Spacing.s6) {
                 PosterImage(item: item)
                     .overlay(alignment: .bottom) {
-                        if let progress, progress.isResumable { ProgressBar(fraction: progress.fraction) }
+                        if let progress, progress.isInProgress { ProgressBar(fraction: progress.fraction) }
                     }
                     .clipShape(.rect(cornerRadius: Riffle.Radius.md))
 
@@ -27,6 +27,15 @@ struct DetailView: View {
                     Text(caption)
                         .font(Riffle.Typography.caption)
                         .foregroundStyle(Riffle.Palette.inkMuted)
+                    if let status = watchStatus {
+                        HStack(spacing: Riffle.Spacing.s1) {
+                            if progress?.state == .watched { WatchedMark() }
+                            Text(status)
+                        }
+                        .font(Riffle.Typography.caption)
+                        .foregroundStyle(Riffle.Palette.inkMuted)
+                        .accessibilityElement(children: .combine)
+                    }
                     BadgeRow(badges: Format.badges(item, limit: 3))
                 }
 
@@ -58,6 +67,40 @@ struct DetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .riffleScreen()
         .task(id: itemID) { try? await model.client?.warm(itemID) }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    if progress?.state == .watched {
+                        Button("Mark as unwatched", systemImage: "circle") {
+                            Task { await model.setWatched(itemID, false) }
+                        }
+                    } else {
+                        Button("Mark as watched", systemImage: "checkmark.circle") {
+                            Task { await model.setWatched(itemID, true) }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .foregroundStyle(Riffle.Palette.ink)
+                        .accessibilityLabel("More")
+                }
+            }
+        }
+    }
+
+    /// "Watched", "Watched 3 times", "In progress · 23:10 left"; nil when unwatched.
+    private var watchStatus: String? {
+        guard let progress else { return nil }
+        switch progress.state {
+        case .watched:
+            let times = progress.timesFinished ?? 1
+            return times > 1 ? "Watched \(times) times" : "Watched"
+        case .partial:
+            let left = max(progress.duration - progress.position, 0)
+            return left > 0 ? "In progress · \(Format.time(left)) left" : "In progress"
+        case .unwatched:
+            return nil
+        }
     }
 
     private var caption: String {

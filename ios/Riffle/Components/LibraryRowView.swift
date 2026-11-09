@@ -3,6 +3,7 @@ import SwiftUI
 /// A folder or video row in a list (`design/components/LibraryRow.md`).
 struct FolderRowView: View {
     var folder: Folder
+    var counts: WatchCounts
 
     var body: some View {
         HStack(spacing: Riffle.Spacing.s4) {
@@ -10,10 +11,18 @@ struct FolderRowView: View {
                 .font(Riffle.Typography.body)
                 .foregroundStyle(Riffle.Palette.inkMuted)
                 .frame(width: 28)
-            Text(folder.name)
-                .font(Riffle.Typography.body)
-                .foregroundStyle(Riffle.Palette.ink)
-                .lineLimit(2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(folder.name)
+                    .font(Riffle.Typography.body)
+                    .foregroundStyle(Riffle.Palette.ink)
+                    .lineLimit(2)
+                if counts.total > 0 {
+                    Text(counts.summary)
+                        .font(Riffle.Typography.caption)
+                        .foregroundStyle(Riffle.Palette.inkMuted)
+                        .lineLimit(1)
+                }
+            }
             Spacer(minLength: Riffle.Spacing.s2)
             Text(folder.count, format: .number)
                 .font(Riffle.Typography.caption)
@@ -21,7 +30,7 @@ struct FolderRowView: View {
         }
         .frame(minHeight: Riffle.minimumHitTarget)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(folder.name), \(folder.count) videos")
+        .accessibilityLabel("\(folder.name), \(folder.count) videos, \(counts.summary)")
     }
 }
 
@@ -34,7 +43,7 @@ struct VideoRowView: View {
             PosterImage(item: item, cornerRadius: Riffle.Radius.sm)
                 .frame(width: 96)
                 .overlay(alignment: .bottom) {
-                    if let progress, progress.isResumable {
+                    if let progress, progress.isInProgress {
                         ProgressBar(fraction: progress.fraction)
                     }
                 }
@@ -50,6 +59,9 @@ struct VideoRowView: View {
                         .foregroundStyle(Riffle.Palette.alert)
                 } else {
                     HStack(spacing: Riffle.Spacing.s2) {
+                        if progress?.state == .watched {
+                            WatchedMark()
+                        }
                         Text(Format.meta(item))
                             .font(Riffle.Typography.caption)
                             .foregroundStyle(Riffle.Palette.inkMuted)
@@ -61,6 +73,17 @@ struct VideoRowView: View {
         }
         .padding(.vertical, Riffle.Spacing.s1)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Marks a watched video beside its metadata: a quiet `ink-muted` check, so the
+/// list stays calm and unwatched videos need no marker at all.
+struct WatchedMark: View {
+    var body: some View {
+        Image(systemName: "checkmark.circle.fill")
+            .font(Riffle.Typography.caption)
+            .foregroundStyle(Riffle.Palette.inkMuted)
+            .accessibilityLabel("Watched")
     }
 }
 

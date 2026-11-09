@@ -70,6 +70,8 @@ last library response is cached in Caches so the app opens instantly and offline
   fine scrubbing, throttled keyframe seeks then an exact seek on release, gestures,
   orientation following the video, buffering and error states, track sheet, resume
   position every 10 s and on close
+- [x] Watch states from Riffle Server: counts per folder, watched marks, Continue
+  watching from the `partial` state, Mark as watched / unwatched
 - [ ] Check on a device: hardware decoding, gesture feel, the track sheet with real
   audio and subtitle tracks
 - [ ] Picture in Picture, AirPlay remote mode, chapter haptics

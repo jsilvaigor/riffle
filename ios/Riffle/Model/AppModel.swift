@@ -15,7 +15,9 @@ final class AppModel {
     private(set) var connection: ConnectionState = .connecting
     private(set) var library: LibraryResponse?
     private(set) var roots: [Folder] = []
-    private(set) var progress: [String: WatchProgress] = [:]
+    private(set) var progress: [String: WatchProgress] = [:] { didSet { recount() } }
+    /// Watch-state counts per folder id ("Movies", "Movies/Pixar"), every level included.
+    private(set) var folderCounts: [String: WatchCounts] = [:]
     private(set) var lastError: String?
 
     private var itemsByID: [String: Item] = [:]
@@ -38,10 +40,14 @@ final class AppModel {
 
     func item(_ id: String) -> Item? { itemsByID[id] }
 
+    func state(_ id: String) -> WatchState { progress[id]?.state ?? .unwatched }
+
+    func counts(_ folder: Folder) -> WatchCounts { folderCounts[folder.id] ?? WatchCounts() }
+
     /// Started videos, most recently watched first.
     var continueWatching: [Item] {
         progress
-            .filter { $0.value.isResumable }
+            .filter { $0.value.isInProgress && itemsByID[$0.key] != nil }
             .sorted { ($0.value.updatedAt ?? .distantPast) > ($1.value.updatedAt ?? .distantPast) }
             .compactMap { itemsByID[$0.key] }
             .prefix(12)
@@ -119,11 +125,34 @@ final class AppModel {
         try await client?.rescan()
     }
 
-    /// Records a position locally right away and sends it to the server.
+    /// Records a position locally right away and sends it to the server, which
+    /// answers with the entry and its watch state.
     func saveProgress(_ id: String, position: Double, duration: Double) async {
-        progress[id] = WatchProgress(position: position, duration: duration, updatedAt: .now)
+        var local = progress[id] ?? WatchProgress(position: position, duration: duration)
+        local.position = position
+        local.duration = duration
+        local.updatedAt = .now
+        progress[id] = local
         progressETag = nil
-        try? await client?.putProgress(id, position: position, duration: duration)
+        if let entry = try? await client?.putProgress(id, position: position, duration: duration) {
+            progress[id] = entry
+        }
+    }
+
+    /// Mark as watched or unwatched. Updates at once; puts it back if the server refuses.
+    func setWatched(_ id: String, _ watched: Bool) async {
+        let before = progress[id]
+        progress[id] = watched
+            ? WatchProgress(position: 0, duration: before?.duration ?? item(id)?.duration ?? 0,
+                            updatedAt: .now, state: .watched)
+            : nil
+        progressETag = nil
+        do {
+            progress[id] = try await client?.setWatched(id, watched)
+        } catch {
+            progress[id] = before
+            lastError = error.localizedDescription
+        }
     }
 
     // MARK: Private
@@ -132,6 +161,23 @@ final class AppModel {
         library = lib
         itemsByID = Dictionary(lib.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         roots = Folder.roots(from: lib)
+        recount()
+    }
+
+    /// Counts per folder are the client's job (server/README.md, Watch state): each
+    /// item adds its state to its root and every folder above it.
+    private func recount() {
+        var counts: [String: WatchCounts] = [:]
+        for item in library?.items ?? [] {
+            let state = progress[item.id]?.state ?? .unwatched
+            var id = item.root
+            counts[id, default: WatchCounts()].add(state)
+            for component in item.folderComponents {
+                id += "/" + component
+                counts[id, default: WatchCounts()].add(state)
+            }
+        }
+        folderCounts = counts
     }
 
     private static func displayName(_ h: HealthInfo) -> String {

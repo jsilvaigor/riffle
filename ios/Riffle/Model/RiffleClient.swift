@@ -72,11 +72,27 @@ struct RiffleClient: Sendable {
         try await decode(get("api/items/\(id)"))
     }
 
-    func putProgress(_ id: String, position: Double, duration: Double) async throws {
+    /// Reports the playback position; the server answers with the entry, state included.
+    @discardableResult
+    func putProgress(_ id: String, position: Double, duration: Double) async throws -> WatchProgress? {
+        try await putProgressBody(id, ["position": position, "duration": duration])
+    }
+
+    /// Marks watched (position resets to 0) or unwatched (the entry is removed).
+    /// Returns the new entry, or nil when it's now unwatched.
+    @discardableResult
+    func setWatched(_ id: String, _ watched: Bool) async throws -> WatchProgress? {
+        if watched { return try await putProgressBody(id, ["watched": true]) }
+        _ = try await send(request("api/items/\(id)/progress", method: "DELETE"))
+        return nil
+    }
+
+    private func putProgressBody<Body: Encodable>(_ id: String, _ body: Body) async throws -> WatchProgress? {
         var req = request("api/items/\(id)/progress", method: "PUT")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONEncoder().encode(["position": position, "duration": duration])
-        _ = try await send(req)
+        req.httpBody = try JSONEncoder().encode(body)
+        let (data, _) = try await send(req)
+        return try? Self.decoder.decode(WatchProgress.self, from: data)
     }
 
     /// Spins up the array disk while the viewer is still on the detail screen.
