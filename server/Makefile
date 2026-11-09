@@ -42,6 +42,9 @@ media: ## generate test videos in testdata/media
 	@# An anamorphic clip (720x480 with 32:27 pixels, shown as 16:9), like a DVD rip.
 	test -f testdata/media/anamorphic.mkv || ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=duration=30:size=720x480:rate=30 \
 		-vf setsar=32/27 -c:v libx264 -preset veryfast -crf 30 testdata/media/anamorphic.mkv
+	@# A 2.40:1 film letterboxed inside a 16:9 frame (black bands baked in), for crop detection.
+	test -f testdata/media/letterboxed.mp4 || ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=duration=60:size=1920x800:rate=24 \
+		-vf pad=1920:1080:0:140:black -c:v libx264 -preset veryfast -crf 30 -g 48 testdata/media/letterboxed.mp4
 
 dev: ## run the server natively against testdata/media (CPU decoding)
 	RIFFLE_MEDIA=Test=$(CURDIR)/testdata/media RIFFLE_DATA=$(CURDIR)/data RIFFLE_TOKEN=$(TOKEN) \

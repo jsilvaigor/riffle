@@ -126,6 +126,7 @@ func (l *Library) load() {
 		log.Printf("library: ignoring corrupt index: %v", err)
 		return
 	}
+	stale := 0
 	for _, it := range items {
 		rp, ok := l.rootPath(it.Root)
 		if !ok {
@@ -135,14 +136,16 @@ func (l *Library) load() {
 		if it.Trickplay == TrickPending || it.Trickplay == TrickFailed {
 			it.Trickplay = TrickNone // re-queued after the startup scan; failures retry once per start
 		}
-		if it.Trickplay == TrickReady {
-			if _, err := os.Stat(filepath.Join(l.cfg.DataDir, "trickplay", it.ID, "manifest.json")); err != nil {
-				it.Trickplay = TrickNone
-			}
+		if it.Trickplay == TrickReady && !l.manifestCurrent(it.ID) {
+			it.Trickplay = TrickNone // missing, or made before crop detection: regenerate
+			stale++
 		}
 		l.items[it.ID] = it
 	}
 	log.Printf("library: loaded %d items from index", len(l.items))
+	if stale > 0 {
+		log.Printf("library: %d items get new thumbnails (missing, or made before crop detection)", stale)
+	}
 }
 
 func (l *Library) save() {
@@ -347,6 +350,17 @@ func (l *Library) tilesStale(it *Item) bool {
 	want := float64(v.DisplayWidth) / float64(v.DisplayHeight)
 	got := float64(m.TileWidth) / float64(m.TileHeight)
 	return math.Abs(got-want)/want > 0.03 // tile heights are rounded to even pixels
+}
+
+// manifestCurrent reports whether an item's trickplay manifest exists and was
+// written by this manifestVersion.
+func (l *Library) manifestCurrent(id string) bool {
+	b, err := os.ReadFile(filepath.Join(l.cfg.DataDir, "trickplay", id, "manifest.json"))
+	if err != nil {
+		return false
+	}
+	var m Manifest
+	return json.Unmarshal(b, &m) == nil && m.V >= manifestVersion
 }
 
 // Get returns the live item (callers must not mutate it without the lock).
