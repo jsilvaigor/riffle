@@ -26,7 +26,8 @@ type libCard struct {
 	Size                                              int64
 	Duration                                          float64
 	Portrait                                          bool
-	Watched                                           int // percent, 0 if never played
+	Watched                                           int  // percent, for partially watched videos
+	Done                                              bool // watched
 }
 
 // folderOf is "Root" or "Root/dir/sub" for an item.
@@ -117,19 +118,18 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 		folder = "" // unknown or removed folder: back to the top
 	}
 
-	s.progMu.Lock()
-	progress := make(map[string]Progress, len(s.progress))
-	for k, v := range s.progress {
-		progress[k] = v
-	}
-	s.progMu.Unlock()
+	progress := s.progressSnapshot()
 
 	var matches []Item
+	var scope []string // every video in this folder and below, for the watch counts
 	for _, it := range items {
+		f := folderOf(it)
+		if folder == "" || f == folder || strings.HasPrefix(f, folder+"/") {
+			scope = append(scope, it.ID)
+		}
 		if q != "" && !strings.Contains(strings.ToLower(it.Path), q) {
 			continue
 		}
-		f := folderOf(it)
 		if searching {
 			if folder != "" && f != folder && !strings.HasPrefix(f, folder+"/") {
 				continue
@@ -154,8 +154,12 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 			if v == nil || v.DisplayHeight <= v.DisplayWidth {
 				continue
 			}
-		case "watched":
-			if _, ok := progress[it.ID]; !ok {
+		case WatchWatched, WatchPartial:
+			if progress[it.ID].State != state {
+				continue
+			}
+		case WatchUnwatched:
+			if st := progress[it.ID].State; st == WatchWatched || st == WatchPartial {
 				continue
 			}
 		}
@@ -200,8 +204,13 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 				c.Res, c.Codec, c.Portrait = fmt.Sprintf("%d×%d", w, h), v.Codec, h > w
 			}
 		}
-		if p, ok := progress[it.ID]; ok && p.Duration > 0 {
-			c.Watched = max(1, min(100, int(p.Position*100/p.Duration)))
+		switch p := progress[it.ID]; p.State {
+		case WatchWatched:
+			c.Done = true
+		case WatchPartial:
+			if p.Duration > 0 {
+				c.Watched = max(1, min(100, int(p.Position*100/p.Duration)))
+			}
 		}
 		cards[i] = c
 	}
@@ -225,7 +234,8 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 		"Cards": cards, "Total": total, "First": offset == 0,
 		"Folder": folder, "Crumbs": crumbs, "Subfolders": subfolders,
 		"Searching": searching, "LibraryEmpty": len(items) == 0,
-		"Next": next, "More": next < total, "Remaining": total - next,
+		"Watch": countWatch(scope, progress),
+		"Next":  next, "More": next < total, "Remaining": total - next,
 	}
 }
 

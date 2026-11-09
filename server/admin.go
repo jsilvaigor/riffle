@@ -182,6 +182,13 @@ func (s *Server) adminItemAction(w http.ResponseWriter, r *http.Request) {
 	case "reprobe":
 		go s.lib.Reprobe(context.Background(), id)
 		s.toast(w, true, "Re-probing %s.", name)
+	case "watched", "unwatched":
+		mark := r.PathValue("action") == "watched"
+		if _, _, err := s.setProgress(id, progressUpdate{Watched: &mark}); err != nil {
+			s.toast(w, false, "Couldn't save: %v", err)
+			return
+		}
+		s.toast(w, true, "Marked %s as %s.", name, r.PathValue("action"))
 	default:
 		http.NotFound(w, r)
 	}
@@ -232,14 +239,16 @@ func (s *Server) adminOverview() map[string]any {
 	for _, r := range s.cfg.Roots {
 		rootRows = append(rootRows, root{r.Name, r.Path, roots[r.Name]})
 	}
-	s.progMu.Lock()
-	progress := len(s.progress)
-	s.progMu.Unlock()
+	ids := make([]string, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+	}
+	watch := countWatch(ids, s.progressSnapshot())
 	return map[string]any{
 		"Version": version, "Commit": commit, "Uptime": time.Since(startedAt),
 		"AuthRequired": s.cfg.Token != "", "Config": s.cfg,
 		"Items": len(items), "Size": size, "Duration": duration, "Roots": rootRows,
-		"WithVideo": withVideo, "Tricks": tricks, "Progress": progress,
+		"WithVideo": withVideo, "Tricks": tricks, "Watch": watch,
 		"Scan": s.lib.Status(), "Trick": s.trick.Status(),
 	}
 }
