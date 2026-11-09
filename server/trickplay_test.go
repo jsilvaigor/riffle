@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestTrickQueuePriority(t *testing.T) {
@@ -48,5 +52,77 @@ func TestDetectCrop(t *testing.T) {
 	}
 	if c := detectCrop(report, &VideoStream{Width: 1920, Height: 1080, Rotation: 90}); c != nil {
 		t.Errorf("rotated: want nil, got %+v", c)
+	}
+}
+
+// Refreshes (thumbnails that still work) wait behind all other work, and a real
+// request for one promotes it.
+func TestTrickQueueRefreshes(t *testing.T) {
+	q := newTrickQueue()
+	q.pushLow("old1")
+	q.pushLow("old2")
+	q.push("new", false)
+	q.pushLow("new") // already queued for real: stays a real job
+	q.push("old2", false)
+	ctx := context.Background()
+	for _, want := range []string{"new", "old2", "old1"} {
+		if got, _ := q.pop(ctx); got != want {
+			t.Fatalf("pop: got %q, want %q", got, want)
+		}
+	}
+	if len(q.list)+len(q.low) != 0 || len(q.queued) != 0 {
+		t.Fatalf("queue not empty: %v %v %v", q.list, q.low, q.queued)
+	}
+}
+
+// Upgrading keeps thumbnails made before crop detection available while they're redone,
+// and a redo that fails keeps them.
+func TestOutdatedThumbnailsStayAvailable(t *testing.T) {
+	data := t.TempDir()
+	cfg := Config{Roots: []MediaRoot{{"Test", t.TempDir()}}, DataDir: data, HWAccel: "none", Workers: 1,
+		Interval: 5, TileWidth: 160}
+	write := func(id, manifest string) {
+		dir := filepath.Join(data, "trickplay", id)
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(manifest), 0o644)
+	}
+	write("old", `{"interval":5,"tileWidth":160,"tileHeight":90,"columns":10,"rows":10,"count":10,"sheets":1,"format":"jpg"}`)
+	write("cur", `{"v":2,"interval":5,"tileWidth":160,"tileHeight":90,"columns":10,"rows":10,"count":10,"sheets":1,"format":"jpg"}`)
+	probe := &Probe{Duration: 60, Video: &VideoStream{Index: 0, Width: 320, Height: 180}}
+	var items []*Item
+	for _, id := range []string{"old", "cur", "gone"} {
+		items = append(items, &Item{ID: id, Root: "Test", Path: id + ".mp4", Name: id + ".mp4",
+			Probe: probe, Trickplay: TrickReady})
+	}
+	b, _ := json.Marshal(items)
+	os.WriteFile(filepath.Join(data, "library.json"), b, 0o644)
+
+	lib := NewLibrary(cfg)
+	for id, want := range map[string]string{"old": TrickReady, "cur": TrickReady, "gone": TrickNone} {
+		if got := lib.Get(id).Trickplay; got != want {
+			t.Errorf("%s after load: %q, want %q", id, got, want)
+		}
+	}
+	if got := lib.outdated; len(got) != 1 || got[0] != "old" {
+		t.Fatalf("outdated: %v", got)
+	}
+
+	// The redo fails (old.mp4 doesn't exist): the item must stay ready.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	trick := NewTrickplay(cfg, lib)
+	trick.Start(ctx)
+	deadline := time.Now().Add(10 * time.Second)
+	for len(trick.Status()["recentJobs"].([]TrickJob)) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("refresh never ran")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if job := trick.Status()["recentJobs"].([]TrickJob)[0]; job.ID != "old" || job.Error == "" {
+		t.Fatalf("job: %+v", job)
+	}
+	if got := lib.Get("old").Trickplay; got != TrickReady {
+		t.Fatalf("after failed refresh: %q, want ready", got)
 	}
 }
