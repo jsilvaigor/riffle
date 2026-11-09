@@ -62,4 +62,7 @@ the top priority. Two parts:
   track sheet, progress reporting
 - [x] Server + iOS: baked-in black bands detected during trickplay (`cropdetect`) and
   cropped in the player, previews and posters
-- [ ] iOS app: Picture in Picture, AirPlay remote mode; verify on a device
+- [x] iOS app: watch states from the server (folder counts, watched marks, Continue
+  watching, mark as watched / unwatched), Rotate button, crop of baked-in bands
+- [x] iOS app: running on a device; Picture in Picture and AirPlay
+  remote mode dropped

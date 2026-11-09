@@ -33,7 +33,15 @@ SwiftUI app for iPhone and iPad (iOS 18+) that streams from Riffle Server. UI fo
 - **Rotation nudges mpv**: MPVKit's MoltenVK context reads the drawable size only
   when the video output reconfigures, so after a rotation `MPVPlayer.layerDidResize`
   sets `video-aspect-override` to the video's own aspect, nudged by 0.001%, to force
-  one. The view also sets `drawableSize` itself on every layout.
+  one, once MoltenVK has rebuilt the swapchain at the new size.
+- **Metal API Validation is off in the shared scheme**: MoltenVK recreates mpv's
+  swapchain on every size change, and one frame still in flight on the old swapchain
+  gets a drawable of the new size. With validation on, running from Xcode stops with
+  "renderTargetHeight must be <= minimum attachment height"; without it (as in an
+  installed build) Metal drops the out-of-bounds part of that frame. The view doesn't
+  set `drawableSize` during a rotation, so it adds no second mismatch: it waits for
+  MoltenVK's new swapchain, then has mpv reconfigure. MPVKit's demo needs validation off
+  for HDR too.
 - **The simulator decodes in software**: VideoToolbox isn't available there, so mpv
   falls back to the CPU. Devices use hardware decoding.
 
@@ -72,6 +80,5 @@ last library response is cached in Caches so the app opens instantly and offline
   position every 10 s and on close
 - [x] Watch states from Riffle Server: counts per folder, watched marks, Continue
   watching from the `partial` state, Mark as watched / unwatched
-- [ ] Check on a device: hardware decoding, gesture feel, the track sheet with real
-  audio and subtitle tracks
-- [ ] Picture in Picture, AirPlay remote mode, chapter haptics
+- [x] Running on a device
+- Dropped: Picture in Picture, AirPlay remote mode, chapter haptics
