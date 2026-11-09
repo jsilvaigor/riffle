@@ -37,15 +37,47 @@ switches to the CPU for the rest of the session.
 
 ## Running on Unraid
 
-1. Pull the image published by `make release` (Unraid terminal, once `docker login
-   registry.isilva.dev` is done):
+The image is published to `registry.isilva.dev` by `make release`. Log in once from the
+Unraid terminal with `docker login registry.isilva.dev`, and make sure the **Nvidia
+Driver** plugin is installed (needed for `--runtime=nvidia`).
+
+### With the template
+
+[`unraid/riffle-server.xml`](unraid/riffle-server.xml) is an Unraid Docker template with
+every setting below as a form field.
+
+1. Download it into Unraid's user templates (Unraid terminal):
+   ```sh
+   wget -O /boot/config/plugins/dockerMan/templates-user/my-riffle-server.xml \
+     https://raw.githubusercontent.com/jsilvaigor/riffle/main/server/unraid/riffle-server.xml
+   ```
+2. In the **Docker** tab, choose **Add Container**, then pick **riffle-server** under
+   *User templates* in the Template list.
+3. Fill in the form:
+   - **Token**: any long random string; the app and the dashboard ask for it.
+   - **Movies** and **TV**: your shares. They're mounted read-only. For more folders,
+     use *Add another Path* (read-only, e.g. `/media/kids`) and list it in **Folders**.
+   - **Folders**: the name the app shows for each folder and its path inside the
+     container, `Name=/container/path`, comma-separated.
+   - **App data**: keep it on the SSD pool (`/mnt/cache/...` or your "speed" share) so
+     thumbnails and the index stay fast while array disks are spun down.
+   - **Thumbnail decoder**: `cuda` for NVIDIA. For the Intel iGPU, choose `vaapi`, set
+     **Intel iGPU** (under *Show more settings*) to `/dev/dri` and clear
+     `--runtime=nvidia` from *Extra Parameters* (shown in *Advanced View*). `none`
+     uses the CPU.
+4. **Apply**. The WebUI entry in the container's menu opens the admin dashboard.
+
+To update, use **Check for Updates** in the Docker tab, or `docker pull` and restart.
+
+### With docker run
+
+1. Pull the image:
    ```sh
    docker pull registry.isilva.dev/riffle-server:latest
    ```
    To build on the server instead, clone the repo and run `docker build -t riffle-server .`
    in `server/`.
-2. Make sure the **Nvidia Driver** plugin is installed (needed for `--runtime=nvidia`).
-3. Run it:
+2. Run it:
    ```sh
    docker run -d --name riffle-server --restart unless-stopped \
      --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all \
@@ -60,15 +92,18 @@ switches to the CPU for the rest of the session.
    Adjust the media paths to your shares. Mount media **read-only**. Point `/data` at
    the SSD pool (`/mnt/cache/...` or your "speed" share) so thumbnails and the index
    stay fast even while array disks are spun down.
-4. Check the logs with `docker logs -f riffle-server`. If you see
+
+### Checking it
+
+1. Check the logs with `docker logs -f riffle-server`. If you see
    `cuda device unavailable, using CPU`, the NVIDIA runtime isn't reaching the container.
-5. Check hardware decoding from any machine: `make diag URL=http://tower:8770` (the token
+2. Check hardware decoding from any machine: `make diag URL=http://tower:8770` (the token
    comes from `TOKEN=`, `$RIFFLE_TOKEN` or `~/.config/riffle/token`)
    (or `curl -H "Authorization: Bearer change-me" http://tower:8770/api/diagnostics`).
    See [Diagnostics](#diagnostics) for how to read it.
 
-To use the Intel iGPU instead: set `RIFFLE_HWACCEL=vaapi`, add `--device /dev/dri`, and
-drop the `--runtime=nvidia` flags.
+To use the Intel iGPU with `docker run`: set `RIFFLE_HWACCEL=vaapi`, add
+`--device /dev/dri`, and drop the `--runtime=nvidia` flags.
 
 The first scan of a large library runs ffprobe on every file, which takes a few minutes on
 spun-down disks. Items are queued for thumbnails as soon as each is probed, the index is
