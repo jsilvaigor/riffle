@@ -7,7 +7,10 @@ performance is the top priority.** Read `docs/architecture.md` for decisions and
 
 - `server/`: Riffle Server (Go 1.24, standard library only, shells out to ffmpeg/ffprobe).
   Runs in Docker on Unraid. API documented in `server/README.md`.
-- `ios/`: Riffle iOS app (not started yet). Plan: SwiftUI + MPVKit (libmpv).
+- `ios/`: Riffle iOS app, SwiftUI, iOS 18+ (player via MPVKit/libmpv, in progress).
+  Hand-written `Riffle.xcodeproj` with synchronized folders: new files under `Riffle/`
+  join the target automatically. Test: `xcodebuild -project ios/Riffle.xcodeproj
+  -scheme Riffle -destination 'platform=iOS Simulator,name=iPhone 18 Pro' test`.
 - `design/`: design system. `tokens.json` is the source; `RiffleTheme.swift` mirrors it
   for SwiftUI (change both together); `README.md` has the usage rules the app follows;
   `components/` has a guideline per app control; `player.md` specifies the player

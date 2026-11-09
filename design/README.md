@@ -86,6 +86,7 @@ SF Symbols can't ship outside Apple platforms, so the component previews draw si
 | back10, forward10 | `gobackward.10`, `goforward.10` | Transport |
 | close | `xmark` | Player |
 | replay | `arrow.counterclockwise` | Transport, after the video ends |
+| rotate | `rotate.right` | Player |
 | rotationLock | `lock.rotation` | Player |
 | tracks | `text.bubble` | Player: audio and subtitles |
 | pip | `pip.enter` | Player |
@@ -94,6 +95,7 @@ SF Symbols can't ship outside Apple platforms, so the component previews draw si
 | library, search, settings | `rectangle.stack`, `magnifyingglass`, `slider.horizontal.3` | Tab bar |
 | server | `server.rack` | Server status |
 | check | `checkmark` | Track sheet |
+| watched | `checkmark.circle.fill` | Library rows, detail: a watched video, in `ink-muted` |
 | alert, info | `exclamationmark.triangle`, `info.circle` | Errors, notices |
 
 ## Components
