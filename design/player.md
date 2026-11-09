@@ -28,6 +28,7 @@ Riffle never forces a video into an orientation it wasn't shot in. **A portrait 
 - A tap on the video shows or hides the chrome. It fades over 200 ms.
 - While playing, chrome hides 3 seconds after the last touch. It stays while paused, buffering, scrubbing, with a sheet open, and whenever VoiceOver or Switch Control is running.
 - With chrome hidden, the status bar and home indicator hide too.
+- While a video plays (or opens, or buffers), the screen stays on. Paused, ended or closed, Auto-Lock works as usual.
 - While scrubbing, the transport controls hide so the preview and the frame underneath stay clear; the top bar stays.
 
 ## Gestures

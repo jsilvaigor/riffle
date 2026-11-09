@@ -48,11 +48,11 @@ final class PlayerModel {
     let layer = MPVMetalLayer()
 
     // Playback state from mpv.
-    private(set) var phase: Phase = .opening
+    private(set) var phase: Phase = .opening { didSet { updateScreenAwake() } }
     private(set) var position: Double
     private(set) var duration: Double
     private(set) var buffered: Double = 0
-    private(set) var isPaused = false
+    private(set) var isPaused = false { didSet { updateScreenAwake() } }
     private(set) var isBuffering = true
     private(set) var audioTrack = "auto"
     private(set) var subtitleTrack = "no"
@@ -78,6 +78,7 @@ final class PlayerModel {
     @ObservationIgnored private let model: AppModel
     @ObservationIgnored private var hasStarted = false
     @ObservationIgnored private var layerReady = false
+    @ObservationIgnored private var closed = false
     @ObservationIgnored private var orientationDecided = false
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
     @ObservationIgnored private var hideTask: Task<Void, Never>?
@@ -123,6 +124,7 @@ final class PlayerModel {
         guard player == nil, let client = model.client else { return }
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
+        updateScreenAwake()  // property observers don't run for the initial state
         decideOrientation()
 
         let player = MPVPlayer(layer: layer, headers: client.streamHeaders) { [weak self] event in
@@ -169,6 +171,8 @@ final class PlayerModel {
 
     /// Called as the player closes: saves the position and releases mpv.
     func stop() async {
+        closed = true
+        updateScreenAwake()
         tasks.forEach { $0.cancel() }
         hideTask?.cancel()
         bufferTask?.cancel()
@@ -185,6 +189,19 @@ final class PlayerModel {
         stalled = false
         player?.load(client.streamURL(request.item.id), start: position)
         beginBufferWatch(firstOpen: false)
+    }
+
+    // MARK: Screen
+
+    /// mpv doesn't hold the screen awake the way AVPlayer does, so auto-lock would dim
+    /// and lock the phone mid-video. Keep it awake while a video is opening or
+    /// playing (buffering included); a paused, ended or failed player lets the phone
+    /// lock as usual, and closing the player always hands auto-lock back.
+    private func updateScreenAwake() {
+        let awake = !closed && !isPaused && (phase == .playing || phase == .opening)
+        if UIApplication.shared.isIdleTimerDisabled != awake {
+            UIApplication.shared.isIdleTimerDisabled = awake
+        }
     }
 
     // MARK: Transport
