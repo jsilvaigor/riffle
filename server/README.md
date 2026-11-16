@@ -124,6 +124,7 @@ All endpoints except `/api/health` require the token, sent as `Authorization: Be
 | Method & path | Description |
 |---|---|
 | `GET /api/health` | Server name, version, commit, whether auth is required |
+| `GET /admin/watch/{id}` | Web player for one video (see [Web player](#web-player)) |
 | `GET /admin/` | Admin dashboard (see below); its fragments and actions under `/admin/f/` and `/admin/a/` need the token |
 | `GET /api/diagnostics` | Build, ffmpeg/GPU environment and live decode tests (takes 1-3 s) |
 | `GET /api/library` | `{roots: [...], items: [...]}` with metadata and trickplay state. Gzipped when accepted; weak `ETag`, so a refresh with `If-None-Match` gets a 304 |
@@ -231,8 +232,7 @@ breakdown every minute) and shows:
   resolution and orientation
 - **Hardware tests:** the `/api/diagnostics` decode tests, run on demand
 
-The **Library** page (`/admin/library`) browses the library like a file explorer, without
-playing anything: a folder tree on the left (with video counts), and on the right the
+The **Library** page (`/admin/library`) browses the library like a file explorer: a folder tree on the left (with video counts), and on the right the
 selected folder's breadcrumb, its subfolders as folder tiles, and its own videos as a
 poster grid (60 at a time, "Show more" for the rest). Search and the filters (thumbnail
 state, unreadable metadata, portrait, started) look through the selected folder and its
@@ -240,9 +240,29 @@ subfolders, and say where each result is; sort by name, recently changed, size o
 duration. The folder is in the URL (`#folder=…`), so back and forward walk the folders.
 Clicking a video opens its details: a hover-scrub preview built from the trickplay sheets (the same
 frames the app shows while scrubbing), the sheets themselves, metadata (codec, stored and
-displayed size, rotation, audio and subtitle tracks), the resume position, and **Rebuild
-thumbnails** / **Re-probe**. Details are linkable as `/admin/library#folder=…&item=<id>`. Images
+displayed size, rotation, audio and subtitle tracks), the resume position, **Play**, and
+**Rebuild thumbnails** / **Re-probe**. Details are linkable as `/admin/library#folder=…&item=<id>`. Images
 load through the API with the token as `?token=`, since `<img>` can't send headers.
+
+### Web player
+
+**Play** in a video's details opens `/admin/watch/<id>`, which plays it in the browser. It
+uses the same token as the dashboard and the same API as the app:
+
+- The `<video>` element plays `GET /api/items/{id}/stream?token=…` directly, so seeking is a
+  Range request and nothing is transcoded. That also means it only plays what the browser
+  decodes: Chrome handles h264, HEVC (with hardware support), VP9 and AV1 in MP4, MOV, WebM
+  and MKV; Safari doesn't open MKV; nothing plays WMV, MPEG-4 Part 2 or MPEG-2. For a codec
+  the browser reports it can't decode, the player says so (with **Try anyway**) instead of
+  showing a black frame, and warns when the default audio track (AC-3, DTS) may be silent.
+- The scrub bar shows trickplay previews while hovering or dragging, from sheets fetched
+  when the page opens (the manifest request moves the video up the thumbnail queue).
+  Dragging follows with keyframe seeks at most every 120 ms; releasing seeks precisely.
+- Resume and watch state go through `/api/progress`: a video in progress resumes where it
+  stopped (**Start over** restarts it), and the position is saved every 10 s while playing,
+  on pause and when the page closes. Opening a video without playing it saves nothing.
+- Keys: Space or K plays and pauses, ← and → skip 10 s (60 s with Shift), F is full screen,
+  M mutes. Double-click toggles full screen. The volume is remembered per browser.
 
 ### Diagnostics
 

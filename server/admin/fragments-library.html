@@ -165,6 +165,7 @@
     {{with $it.ProbeErr}}<p class="err-text mono">{{icon "alert"}} {{.}}</p>{{end}}
     {{with $it.TrickErr}}<p class="err-text mono">{{icon "alert"}} {{.}}</p>{{end}}
     <div class="actions">
+      {{if and $it.Probe $it.Probe.Video}}<a class="button primary" href="/admin/watch/{{$it.ID}}">{{icon "play"}} Play</a>{{end}}
       <button hx-post="/admin/a/items/{{$it.ID}}/thumbnails" hx-target="#toast" hx-disabled-elt="this">{{icon "film"}} Rebuild thumbnails</button>
       <button hx-post="/admin/a/items/{{$it.ID}}/reprobe" hx-target="#toast" hx-disabled-elt="this">{{icon "search"}} Re-probe</button>
       {{if and .Progress (eq .Progress.State "watched")}}

@@ -56,6 +56,9 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("GET /admin/{$}", page("index.html"))
 	mux.HandleFunc("GET /admin/library", page("library.html"))
+	// The web player. The page reads the item ID from its path and loads everything
+	// else from the API with the token, like the other pages.
+	mux.HandleFunc("GET /admin/watch/{id}", page("watch.html"))
 	// Shared assets: scripts, styles, icons, logos, illustrations and favicons (never the
 	// HTML templates). no-cache so a server update is picked up straight away; htmx itself
 	// never changes between releases.
