@@ -84,7 +84,9 @@
   <tbody>
   {{range .recentJobs}}
     <tr>
-      <td class="name">{{if .Name}}{{.Name}}{{else}}<span class="mono">{{.ID}}</span>{{end}}
+      <td class="name">
+        {{- $label := .Name}}{{if not $label}}{{$label = .ID}}{{end}}
+        {{- with index $.links .ID}}<a class="item-link" href="{{.}}">{{$label}}</a>{{else}}{{$label}}{{end}}
         {{with .Error}}<div class="err-text mono">{{icon "alert"}} {{.}}</div>{{end}}</td>
       <td>{{.HWAccel}}{{if .Fallback}} <span class="badge">fallback</span>{{end}}</td>
       <td>{{ms .Millis}}</td>

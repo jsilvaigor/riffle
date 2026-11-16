@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -237,6 +238,23 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 		"Watch": countWatch(scope, progress),
 		"Next":  next, "More": next < total, "Remaining": total - next,
 	}
+}
+
+// itemHref links to an item's details on the library page, inside its folder.
+func itemHref(it Item) string {
+	return "/admin/library#" + url.Values{"folder": {folderOf(it)}, "item": {it.ID}}.Encode()
+}
+
+// adminJobs is the trickplay status plus a library link for each recent job whose
+// video is still in the library.
+func (s *Server) adminJobs() map[string]any {
+	data := s.trick.Status()
+	links := map[string]string{}
+	for _, it := range s.lib.Snapshot() {
+		links[it.ID] = itemHref(it)
+	}
+	data["links"] = links
+	return data
 }
 
 func displayDims(v *VideoStream) (int, int) {

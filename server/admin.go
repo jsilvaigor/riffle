@@ -102,7 +102,7 @@ func (s *Server) adminFragment(w http.ResponseWriter, r *http.Request) {
 	case "breakdown":
 		data = s.adminBreakdown()
 	case "jobs":
-		data = s.trick.Status()
+		data = s.adminJobs()
 	case "problems":
 		data = s.adminProblems()
 	case "diagnostics":
