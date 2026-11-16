@@ -64,5 +64,8 @@ the top priority. Two parts:
   cropped in the player, previews and posters
 - [x] iOS app: watch states from the server (folder counts, watched marks, Continue
   watching, mark as watched / unwatched), Rotate button, crop of baked-in bands
+- [x] Server: web player in the admin dashboard (`/admin/watch/{id}`): direct play of the
+  original file, trickplay scrub previews, shared resume positions and watch state. No
+  transcoding, so it only plays what the browser decodes
 - [x] iOS app: running on a device; Picture in Picture and AirPlay
   remote mode dropped

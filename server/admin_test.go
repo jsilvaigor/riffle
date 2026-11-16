@@ -39,7 +39,8 @@ func TestAdminFragmentsAndActions(t *testing.T) {
 	for path, want := range map[string]string{
 		"/admin/assets/htmx.min.js": "var htmx", "/admin/assets/admin.css": "/* Colours",
 		"/admin/assets/admin.js": "const KEY", "/admin/assets/library.js": "// Library page",
-		"/admin/library":          "<title>Library",
+		"/admin/library":        "<title>Library",
+		"/admin/watch/0123abcd": "watch.js", "/admin/assets/watch.js": "// Web player",
 		"/admin/assets/icons.svg": `<symbol id="film"`, "/admin/assets/riffle-lockup.svg": "<svg",
 		"/admin/assets/favicon.svg": "<svg", "/admin/assets/empty-library.svg": "<svg",
 		"/favicon.ico": "\x00\x00\x01\x00", // ICO header
@@ -138,6 +139,10 @@ func TestAdminItemView(t *testing.T) {
 	// No probe and no trickplay yet: no scrub preview, a note instead.
 	if strings.Contains(body, `class="scrub"`) || !strings.Contains(body, "Making scrub previews") {
 		t.Errorf("item without trickplay: %s", body)
+	}
+	// Nothing to play until ffprobe has found a video stream.
+	if strings.Contains(body, "/admin/watch/") {
+		t.Errorf("item without probe offers Play: %s", body)
 	}
 	if res, _ := get(t, srv.URL+"/admin/f/item/nope", auth); res.StatusCode != 404 {
 		t.Errorf("unknown item: %d", res.StatusCode)

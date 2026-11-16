@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Watch · Riffle Server</title>
+<meta name="theme-color" content="#111113">
+<link rel="icon" href="/admin/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/admin/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/admin/assets/apple-touch-icon.png">
+<link rel="stylesheet" href="/admin/assets/admin.css">
+<script src="/admin/assets/htmx.min.js"></script>
+<script src="/admin/assets/admin.js" defer></script>
+<script src="/admin/assets/watch.js" defer></script>
+</head>
+<body>
+<header>
+  <h1><a class="brand" href="/admin/"><img src="/admin/assets/riffle-lockup.svg" alt="Riffle" width="98" height="30"><span>Server admin</span></a></h1>
+  <nav><a href="/admin/"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#gauge"/></svg> Overview</a><a href="/admin/library" id="library-link" aria-current="page"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#stack"/></svg> Library</a></nav>
+  <button id="token-btn" class="link" type="button" aria-label="Change token"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#key"/></svg><span class="label">Change token</span></button>
+</header>
+
+<section id="offline" class="empty" hidden>
+  <img src="/admin/assets/offline.svg" alt="" width="160" height="107">
+  <h3>Can't reach Riffle Server</h3>
+  <p>Check that the container is running, then try again.</p>
+  <button type="button" onclick="location.reload()"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#replay"/></svg> Try again</button>
+</section>
+
+<section id="login" hidden>
+  <form id="login-form">
+    <div class="empty" style="padding:8px 0 16px">
+      <img src="/admin/assets/empty-server.svg" alt="" width="160" height="107">
+      <h3>Connect to Riffle Server</h3>
+    </div>
+    <p class="muted" id="login-msg">Paste the server's <code>RIFFLE_TOKEN</code>. It's kept in this browser only.</p>
+    <input id="token-input" type="password" autocomplete="current-password" spellcheck="false" required
+           aria-label="Riffle Server token">
+    <button class="primary" type="submit">Connect</button>
+  </form>
+</section>
+
+<main id="panels" class="watch">
+  <!-- watch.js fills this in once the token check passes. -->
+  <div id="player" class="player" tabindex="-1" hidden>
+    <video id="video" playsinline preload="metadata"></video>
+    <div class="player-msg" id="player-msg" hidden></div>
+    <div class="spinner" id="spinner" hidden aria-hidden="true"></div>
+    <div class="chrome" id="chrome">
+      <div class="timeline" id="timeline" role="slider" tabindex="0" aria-label="Position"
+           aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+        <div class="preview" id="preview" hidden>
+          <div class="frame" id="preview-frame"><span class="note">Preview not ready</span></div>
+          <span class="t" id="preview-time">0:00</span>
+        </div>
+        <div class="track">
+          <div class="buffered" id="buffered"></div>
+          <div class="played" id="played"></div>
+          <div class="watched-mark" id="resume-mark" hidden></div>
+        </div>
+        <div class="thumb" id="thumb"></div>
+      </div>
+      <div class="controls">
+        <button class="link icon-only" id="play-btn" type="button" aria-label="Play"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#play"/></svg></button>
+        <button class="link icon-only" id="mute-btn" type="button" aria-label="Mute"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#volume"/></svg></button>
+        <input type="range" id="volume" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+        <span class="clock"><span id="cur">0:00</span> <span class="muted">/ <span id="dur">0:00</span></span></span>
+        <span class="spacer"></span>
+        <select id="speed" aria-label="Playback speed">
+          <option value="0.5">0.5×</option><option value="1" selected>1×</option>
+          <option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option>
+        </select>
+        <button class="link icon-only" id="fs-btn" type="button" aria-label="Full screen"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#fullscreen"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="watch-info" id="info" hidden>
+    <div>
+      <h2 id="title"></h2>
+      <p class="muted mono" id="where"></p>
+      <p class="muted" id="specs"></p>
+    </div>
+    <div class="actions">
+      <a class="button" id="back" href="/admin/library"><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#folder"/></svg> Back to folder</a>
+      <button type="button" id="restart" hidden><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#replay"/></svg> Start over</button>
+    </div>
+    <p class="muted keys">Space plays or pauses · ← → skip 10 s (Shift: 60 s) · F full screen · M mute</p>
+  </div>
+
+  <div class="empty" id="not-found" hidden>
+    <img src="/admin/assets/empty-library.svg" alt="" width="160" height="107">
+    <h3>Video not found</h3>
+    <p>It may have been moved or removed since the last scan.</p>
+    <a class="button" href="/admin/library">Open the library</a>
+  </div>
+</main>
+
+<div id="toast" aria-live="polite"></div>
+</body>
+</html>
