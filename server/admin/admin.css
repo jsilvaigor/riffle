@@ -308,3 +308,7 @@ main.watch { max-width: 1280px; }
 .watch-info .actions { margin-top: 0; align-self: flex-start; }
 .watch-info .keys { flex-basis: 100%; font-size: 13px; }
 @media (max-width: 560px) { .player #volume, .watch-info .keys { display: none; } .player .chrome { padding: 24px 8px 4px; } }
+
+/* Video names that open the item in the library (recent thumbnail jobs). */
+a.item-link { color: var(--ink); text-decoration: none; }
+a.item-link:hover { text-decoration: underline; text-decoration-color: var(--ink-muted); }

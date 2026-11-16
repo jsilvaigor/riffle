@@ -239,3 +239,11 @@ func testLibServer(t *testing.T, n int) *httptest.Server {
 	t.Cleanup(srv.Close)
 	return srv
 }
+
+func TestItemHref(t *testing.T) {
+	it := Item{ID: "abc", Root: "TV", Path: "Tom & Jerry/S01/e1.mkv"}
+	want := "/admin/library#folder=TV%2FTom+%26+Jerry%2FS01&item=abc"
+	if got := itemHref(it); got != want {
+		t.Errorf("itemHref = %q, want %q", got, want)
+	}
+}
