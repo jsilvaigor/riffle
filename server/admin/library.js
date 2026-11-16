@@ -159,6 +159,9 @@ document.addEventListener("htmx:afterSwap", (e) => {
   }
 });
 
+// A deleted video's item view closes (the server fires this before "refresh").
+document.body.addEventListener("item-deleted", () => { if (dialog.open) dialog.close(); });
+
 // The item view opens in a dialog. Click on the backdrop closes it.
 dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
 dialog.addEventListener("close", () => {

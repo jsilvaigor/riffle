@@ -274,7 +274,7 @@ func (s *Server) adminItem(w http.ResponseWriter, r *http.Request) {
 	cp := *it
 	s.lib.mu.RUnlock()
 
-	data := map[string]any{"Item": cp, "Folder": folderOf(cp)}
+	data := map[string]any{"Item": cp, "Folder": folderOf(cp), "CanDelete": s.cfg.AllowDelete}
 	if cp.Probe != nil && cp.Probe.Video != nil {
 		dw, dh := displayDims(cp.Probe.Video)
 		data["DisplayW"], data["DisplayH"] = dw, dh

@@ -42,5 +42,6 @@
   <Config Name="Thumbnail width" Target="RIFFLE_TRICKPLAY_WIDTH" Default="320" Mode="" Description="Thumbnail width in pixels." Type="Variable" Display="advanced" Required="false" Mask="false">320</Config>
   <Config Name="Thumbnail workers" Target="RIFFLE_TRICKPLAY_WORKERS" Default="1" Mode="" Description="Concurrent thumbnail jobs. Keep at 1 for the HDD array." Type="Variable" Display="advanced" Required="false" Mask="false">1</Config>
   <Config Name="Accurate thumbnails" Target="RIFFLE_TRICKPLAY_ACCURATE" Default="false|true" Mode="" Description="true decodes every frame for exact thumbnails (much slower); false uses keyframes." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="Allow deleting videos" Target="RIFFLE_ALLOW_DELETE" Default="false|true" Mode="" Description="true lets the dashboard and API delete video files. Also set the media paths' Access Mode to Read/Write." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
   <Config Name="Rescan interval" Target="RIFFLE_SCAN_MINUTES" Default="30" Mode="" Description="Minutes between library rescans; 0 disables." Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
 </Container>

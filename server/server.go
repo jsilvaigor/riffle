@@ -54,6 +54,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/library", s.auth(s.library))
 	mux.HandleFunc("POST /api/library/rescan", s.auth(s.rescan))
 	mux.HandleFunc("GET /api/items/{id}", s.auth(s.item))
+	mux.HandleFunc("DELETE /api/items/{id}", s.auth(s.deleteAPI))
 	mux.HandleFunc("GET /api/items/{id}/stream", s.auth(s.stream)) // also serves HEAD
 	mux.HandleFunc("POST /api/items/{id}/warm", s.auth(s.warm))
 	mux.HandleFunc("GET /api/items/{id}/poster.jpg", s.auth(s.poster))
@@ -153,6 +154,7 @@ func (s *Server) lookup(w http.ResponseWriter, r *http.Request) (*Item, string, 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": "riffle-server", "version": version, "commit": commit, "authRequired": s.cfg.Token != "",
+		"canDelete": s.cfg.AllowDelete,
 	})
 }
 

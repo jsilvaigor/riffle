@@ -173,6 +173,10 @@
       {{else}}
         <button hx-post="/admin/a/items/{{$it.ID}}/watched" hx-target="#toast" hx-disabled-elt="this">{{icon "check"}} Mark as watched</button>
       {{end}}
+      {{if .CanDelete}}
+        <button class="danger" hx-post="/admin/a/items/{{$it.ID}}/delete" hx-target="#toast" hx-disabled-elt="this"
+                hx-confirm="Delete {{$it.Name}} from the NAS? The file is removed from {{$it.Root}}/{{$it.Path}}, along with its thumbnails and resume position. This can't be undone.">{{icon "trash"}} Delete video</button>
+      {{end}}
     </div>
   </div>
 </div>
