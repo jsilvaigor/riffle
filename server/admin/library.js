@@ -192,3 +192,94 @@ document.body.addEventListener("refresh", () => {
     htmx.ajax("GET", "/admin/f/item/" + item, { target: dialog });
   }
 });
+
+// Multi-select for deleting, when the server allows it (RIFFLE_ALLOW_DELETE). Select
+// turns tiles into checkboxes: videos, and folders inside a media root. The selection is
+// kept while moving between folders, so it can span several. Delete… asks the server
+// for a summary of what will go (/admin/f/delete-preview) and shows it in #confirm.
+const selected = new Map(); // "item:<id>" or "folder:<path>" -> name
+const bar = document.getElementById("selection-bar");
+const confirmBox = document.getElementById("confirm");
+let selecting = false;
+
+const keyOf = (tile) => tile.dataset.select === "item" ? "item:" + tile.dataset.id : "folder:" + tile.dataset.folder;
+
+function paintSelection() {
+  document.querySelectorAll("#results [data-select]").forEach((t) => {
+    const on = selected.has(keyOf(t));
+    t.classList.toggle("selected", on);
+    t.setAttribute("aria-pressed", on);
+  });
+  document.querySelectorAll(".select-toggle").forEach((b) => b.setAttribute("aria-pressed", selecting));
+  let items = 0, folders = 0;
+  for (const k of selected.keys()) k.startsWith("item:") ? items++ : folders++;
+  const parts = [];
+  if (folders) parts.push(folders + (folders === 1 ? " folder" : " folders"));
+  if (items) parts.push(items + (items === 1 ? " video" : " videos"));
+  document.getElementById("selection-count").textContent = parts.length ? parts.join(" and ") + " selected" : "Pick videos or folders";
+  document.getElementById("selection-delete").disabled = selected.size === 0;
+  document.getElementById("selection-clear").hidden = selected.size === 0;
+}
+function setSelecting(on) {
+  selecting = on;
+  document.body.classList.toggle("selecting", on);
+  bar.hidden = !on;
+  if (!on) selected.clear();
+  paintSelection();
+}
+
+// Capture phase: in select mode a tile click selects instead of opening the video or
+// folder (it never reaches htmx or the folder-link handler).
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".select-toggle")) { setSelecting(!selecting); return; }
+  if (!selecting) return;
+  const tile = e.target.closest("#results .tile");
+  if (!tile) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (!tile.dataset.select) { toast("Media folders themselves can't be deleted; open one to pick folders inside it.", false); return; }
+  const k = keyOf(tile);
+  if (selected.has(k)) selected.delete(k); else selected.set(k, tile.getAttribute("aria-label") || tile.dataset.folder);
+  paintSelection();
+}, true);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && selecting && !confirmBox.open && !dialog.open) setSelecting(false);
+});
+document.getElementById("selection-cancel").addEventListener("click", () => setSelecting(false));
+document.getElementById("selection-clear").addEventListener("click", () => { selected.clear(); paintSelection(); });
+
+document.getElementById("selection-delete").addEventListener("click", async () => {
+  const body = new URLSearchParams();
+  for (const k of selected.keys()) {
+    const [kind, ...rest] = k.split(":");
+    body.append(kind, rest.join(":"));
+  }
+  const res = await fetch("/admin/f/delete-preview", {
+    method: "POST", body, headers: { Authorization: "Bearer " + store.get() },
+  }).catch(() => null);
+  if (!res || !res.ok) { toast("Couldn't prepare the delete" + (res ? " (" + res.status + ")" : "") + ".", false); return; }
+  confirmBox.innerHTML = await res.text();
+  htmx.process(confirmBox);
+  confirmBox.showModal();
+});
+confirmBox.addEventListener("click", (e) => { if (e.target === confirmBox) confirmBox.close(); });
+confirmBox.addEventListener("close", () => { confirmBox.innerHTML = ""; });
+
+// The server fires "deleted" (then "refresh") after a delete: close the confirmation,
+// end select mode and reload the tree, whose folders and counts changed.
+document.body.addEventListener("deleted", () => {
+  if (confirmBox.open) confirmBox.close();
+  setSelecting(false);
+  htmx.ajax("GET", "/admin/f/tree", { target: "#tree" });
+});
+document.addEventListener("htmx:afterSwap", (e) => {
+  if (e.detail.target.id !== "results") return;
+  paintSelection();
+  // A deleted folder sends the browser up to the top: keep the address in step.
+  const head = e.detail.target.querySelector(".browse-head");
+  const p = hashParams();
+  if (head && (p.get("folder") || "") !== head.dataset.folder && p.has("folder")) {
+    if (head.dataset.folder) p.set("folder", head.dataset.folder); else p.delete("folder");
+    setHash(p, false);
+  }
+});

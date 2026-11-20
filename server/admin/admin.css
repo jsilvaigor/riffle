@@ -312,3 +312,34 @@ main.watch { max-width: 1280px; }
 /* Video names that open the item in the library (recent thumbnail jobs). */
 a.item-link { color: var(--ink); text-decoration: none; }
 a.item-link:hover { text-decoration: underline; text-decoration-color: var(--ink-muted); }
+
+/* Multi-select for deleting (library page). */
+.browse-head { position: relative; }
+.browse-head .select-toggle { float: right; margin-left: 12px; }
+.select-toggle[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.thumb .check { position: absolute; top: 8px; left: 8px; width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid var(--ink); background: rgba(0,0,0,.45); display: none; place-items: center; z-index: 1; }
+.thumb .check .icon { width: 15px; height: 15px; color: var(--on-citron); visibility: hidden; }
+.selecting .tile[data-select] .check { display: grid; }
+.selecting .tile:not([data-select]) { opacity: .45; cursor: not-allowed; }
+.tile.selected { outline: 2px solid var(--citron); outline-offset: -2px; }
+.tile.selected .check { background: var(--citron); border-color: var(--citron); }
+.tile.selected .check .icon { visibility: visible; }
+.selection-bar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 4;
+  width: min(640px, calc(100% - 32px)); display: flex; align-items: center; gap: 8px;
+  background: var(--surface-raised); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+.selection-bar .spacer { flex: 1; }
+.selecting #results { padding-bottom: 80px; }
+.selecting #toast { bottom: 84px; }
+dialog#confirm { width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 0;
+  border: 0; border-radius: 14px; background: var(--surface); color: var(--ink); }
+dialog#confirm::backdrop { background: rgba(0,0,0,.7); }
+.confirm-body { padding: 16px 20px 20px; }
+.confirm-body p { margin: 0 0 10px; }
+.confirm-list, .confirm-names { margin: 0 0 12px; padding: 0; list-style: none; display: grid; gap: 4px; }
+.confirm-list li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.confirm-list .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.confirm-names { padding-left: 18px; list-style: disc; overflow-wrap: anywhere; }
+.confirm-names .muted { list-style: none; margin-left: -18px; }
+.confirm-body .actions { justify-content: flex-end; }

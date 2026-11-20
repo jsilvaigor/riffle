@@ -131,6 +131,7 @@ All endpoints except `/api/health` require the token, sent as `Authorization: Be
 | `GET /api/library` | `{roots: [...], items: [...]}` with metadata and trickplay state. Gzipped when accepted; weak `ETag`, so a refresh with `If-None-Match` gets a 304 |
 | `POST /api/library/rescan` | Trigger a rescan (202) |
 | `GET /api/items/{id}` | One item |
+| `POST /api/delete` | Delete several videos and folders: `{"items": [ids], "folders": ["TV/Show"]}`. A folder goes with everything in it; media roots are refused. Returns `{"items": n, "folders": n, "errors": [...]}` (one entry per file or folder that couldn't be deleted); 403 unless deleting is on |
 | `DELETE /api/items/{id}` | Delete the video file and forget it (204). 403 unless `RIFFLE_ALLOW_DELETE=true`; 409 with the reason when the file can't be removed (read-only mount, permissions) |
 | `GET`/`HEAD /api/items/{id}/stream` | Original file, Range-enabled |
 | `POST /api/items/{id}/warm` | Spin up the disk ahead of playback (202) |
@@ -250,13 +251,24 @@ load through the API with the token as `?token=`, since `<img>` can't send heade
 
 Off by default. To turn it on, set `RIFFLE_ALLOW_DELETE=true` **and** mount the media
 folders read-write (drop `:ro`, or set the paths' Access Mode to *Read/Write* in the Unraid
-template). Then **Delete video** shows in a video's details on the library page; it asks for
-confirmation, removes the file from the share, and drops the video's index entry,
-thumbnails and resume position. Apps can do the same with `DELETE /api/items/{id}` and check
-`canDelete` in `/api/health` before offering it.
+template). Then, on the library page:
 
-There's no trash: the file is gone. With deleting on but the folder still read-only, the
-dashboard says so instead of deleting. Empty folders are left in place.
+- **Delete video** in a video's details deletes that one, after a confirmation.
+- **Select** (above the grid) picks several videos and folders, across folders if you move
+  around while selecting; **Delete…** in the bar at the bottom shows what will go (the
+  folders with their video counts, the videos and their total size, and how many other
+  files the folders hold) before anything is deleted.
+
+A deleted folder goes with **everything in it**, subtitles and artwork included. The media
+folders themselves (the roots in `RIFFLE_MEDIA`) can't be deleted, only folders inside
+them. Deleting removes the files from the share, then each video's index entry, thumbnails
+and resume position. Apps can do the same with `DELETE /api/items/{id}` and
+`POST /api/delete`, and check `canDelete` in `/api/health` before offering it.
+
+There's no trash: the files are gone. With deleting on but the folder still read-only, the
+dashboard says so instead of deleting; when some items fail, the rest are still deleted
+and the message says which failed. Deleting single videos leaves their folder in place,
+even when it ends up empty.
 
 ### Web player
 

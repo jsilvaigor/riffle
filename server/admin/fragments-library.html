@@ -17,6 +17,7 @@
 {{define "browse"}}
 {{if .First}}
   <div class="browse-head" data-folder="{{.Folder}}">
+    {{if .CanDelete}}<button type="button" class="small select-toggle" aria-pressed="false">{{icon "check"}} Select</button>{{end}}
     <nav class="crumbs" aria-label="Folder path">
       {{- range $i, $c := .Crumbs}}{{if $i}}{{icon "chevron"}}{{end}}<a href="#" data-folder="{{$c.Path}}">{{$c.Name}}</a>{{end -}}
       {{if not .Crumbs}}<span>All media folders</span>{{end}}
@@ -31,8 +32,8 @@
     <ul class="grid">
       {{range .Subfolders}}
       <li>
-        <a class="tile folder-tile" href="#" data-folder="{{.Path}}">
-          <div class="thumb">{{icon "folder"}}</div>
+        <a class="tile folder-tile" href="#" data-folder="{{.Path}}"{{if contains .Path "/"}} data-select="folder"{{end}}>
+          <div class="thumb">{{icon "folder"}}<span class="check" aria-hidden="true">{{icon "check"}}</span></div>
           <div class="meta">
             <span class="title">{{.Name}}</span>
             <span class="sub">{{.Count}} video{{if ne .Count 1}}s{{end}}{{with len .Children}} · {{.}} folder{{if ne . 1}}s{{end}}{{end}}</span>
@@ -64,8 +65,9 @@
 {{range .Cards}}
 <li>
   <button class="tile" type="button" hx-get="/admin/f/item/{{.ID}}" hx-target="#item"
-          aria-label="{{.Name}}">
+          aria-label="{{.Name}}" data-select="item" data-id="{{.ID}}">
     <div class="thumb">
+      <span class="check" aria-hidden="true">{{icon "check"}}</span>
       <img data-src="/api/items/{{.ID}}/poster.jpg" alt="" loading="lazy" class="missing">
       <span class="note">{{if .ProbeErr}}{{icon "alert"}}Can't read this file{{else if eq .Trickplay "failed"}}{{icon "film"}}No preview{{else if eq .Trickplay "ready"}}{{icon "film"}}Loading…{{else}}{{icon "film"}}Preview not ready{{end}}</span>
       {{if .Duration}}<span class="dur">{{timecode .Duration}}</span>{{end}}
@@ -180,4 +182,38 @@
     </div>
   </div>
 </div>
+{{end}}
+
+{{define "delete-preview"}}
+<form class="confirm" hx-post="/admin/a/delete" hx-target="#toast" hx-disabled-elt="find button.danger">
+  <div class="item-head">
+    <h2>{{if .Empty}}Nothing to delete{{else}}Delete
+      {{- if .Folders}} {{plural (len .Folders) "folder"}}{{if .IDs}} and {{plural (len .IDs) "video"}}{{end}}
+      {{- else}} {{plural .Videos "video"}}{{end}}?{{end}}</h2>
+    <button class="link icon-only" type="button" onclick="this.closest('dialog').close()" aria-label="Close">{{icon "close"}}</button>
+  </div>
+  <div class="confirm-body">
+    {{range .IDs}}<input type="hidden" name="item" value="{{.}}">{{end}}
+    {{range .Folders}}<input type="hidden" name="folder" value="{{.}}">{{end}}
+    {{with .FolderRows}}
+      <ul class="confirm-list">
+        {{range .}}<li>{{icon "folder"}}<span class="mono"><bdi>{{.Path}}</bdi></span><span class="muted">{{plural .Videos "video"}}</span></li>{{end}}
+      </ul>
+    {{end}}
+    {{if .Videos}}
+      <p><strong>{{plural .Videos "video"}}</strong> · {{bytes .Size}} in total{{if .Folders}}, counting the videos inside the folders{{end}}:</p>
+      <ul class="confirm-names">
+        {{range .Names}}<li>{{.}}</li>{{end}}
+        {{if gt .Videos (len .Names)}}<li class="muted">and {{plural (sub .Videos (len .Names)) "more video"}}</li>{{end}}
+      </ul>
+    {{end}}
+    {{if .OtherFiles}}<p>The folders also hold <strong>{{plural .OtherFiles "other file"}}</strong> (subtitles, artwork and so on). They're deleted too.</p>{{end}}
+    {{range .Refused}}<p class="err-text">{{icon "alert"}} {{.}}</p>{{end}}
+    {{if not .Empty}}<p class="alert">{{icon "alert"}} This removes the files from the NAS. It can't be undone.</p>{{end}}
+    <div class="actions">
+      <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+      {{if not .Empty}}<button type="submit" class="danger">{{icon "trash"}} Delete</button>{{end}}
+    </div>
+  </div>
+</form>
 {{end}}

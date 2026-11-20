@@ -79,6 +79,14 @@
 </main>
 
 <dialog id="item" aria-label="Video details"></dialog>
+<dialog id="confirm" aria-label="Confirm delete"></dialog>
+<div id="selection-bar" class="selection-bar" hidden>
+  <span id="selection-count">Nothing selected</span>
+  <button type="button" id="selection-clear" class="link">Clear</button>
+  <span class="spacer"></span>
+  <button type="button" id="selection-cancel">Done</button>
+  <button type="button" id="selection-delete" class="danger" disabled><svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#trash"/></svg> Delete…</button>
+</div>
 <div id="toast" aria-live="polite"></div>
 </body>
 </html>
