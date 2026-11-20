@@ -55,6 +55,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/library/rescan", s.auth(s.rescan))
 	mux.HandleFunc("GET /api/items/{id}", s.auth(s.item))
 	mux.HandleFunc("DELETE /api/items/{id}", s.auth(s.deleteAPI))
+	mux.HandleFunc("POST /api/delete", s.auth(s.deleteManyAPI))
 	mux.HandleFunc("GET /api/items/{id}/stream", s.auth(s.stream)) // also serves HEAD
 	mux.HandleFunc("POST /api/items/{id}/warm", s.auth(s.warm))
 	mux.HandleFunc("GET /api/items/{id}/poster.jpg", s.auth(s.poster))

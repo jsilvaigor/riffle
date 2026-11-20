@@ -35,6 +35,9 @@ var adminTmpl = template.Must(template.New("").Funcs(template.FuncMap{
 		return n * 100 / total
 	},
 	"timecode": timecode,
+	"plural":   plural,
+	"sub":      func(a, b int) int { return a - b },
+	"contains": strings.Contains,
 	// icon draws a glyph from admin/icons.svg (stand-ins for the design's SF Symbols).
 	"icon": func(name string) template.HTML {
 		return template.HTML(`<svg class="icon" aria-hidden="true"><use href="/admin/assets/icons.svg#` +
@@ -87,6 +90,7 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 		http.ServeFileFS(w, r, adminFS, "admin/favicon.ico")
 	})
 	mux.HandleFunc("GET /admin/f/item/{id}", s.auth(s.adminItem))
+	mux.HandleFunc("POST /admin/f/delete-preview", s.auth(s.adminDeletePreview))
 	mux.HandleFunc("GET /admin/f/{name}", s.auth(s.adminFragment))
 	mux.HandleFunc("POST /admin/a/{action}", s.auth(s.adminAction))
 	mux.HandleFunc("POST /admin/a/items/{id}/{action}", s.auth(s.adminItemAction))
@@ -163,6 +167,17 @@ func (s *Server) adminAction(w http.ResponseWriter, r *http.Request) {
 	case "resume":
 		s.trick.SetPaused(false)
 		s.toast(w, true, "Thumbnail generation resumed.")
+	case "delete": // the library page's multi-select: form values item=<id> and folder=<path>
+		r.ParseForm()
+		res, err := s.deleteMany(r.Form["item"], r.Form["folder"])
+		if err != nil {
+			s.toast(w, false, "%v", err)
+			return
+		}
+		// deleted first: the library page closes the confirmation and clears the
+		// selection before it refreshes.
+		w.Header().Set("HX-Trigger", `{"deleted":"","refresh":""}`)
+		s.render(w, "toast", map[string]any{"OK": len(res.Errors) == 0, "Msg": res.summary()})
 	default:
 		http.NotFound(w, r)
 	}

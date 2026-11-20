@@ -247,3 +247,12 @@ func TestItemHref(t *testing.T) {
 		t.Errorf("itemHref = %q, want %q", got, want)
 	}
 }
+
+// A folder that's gone (its videos were deleted) opens its nearest remaining ancestor.
+func TestBrowseRemovedFolder(t *testing.T) {
+	srv, _ := testServer(t, "secret")
+	_, body := get(t, srv.URL+"/admin/f/browse?folder=Test%2Fgone%2Fdeeper", map[string]string{"Authorization": "Bearer secret"})
+	if !strings.Contains(body, `class="browse-head" data-folder="Test"`) {
+		t.Errorf("browse of a removed folder: %s", body)
+	}
+}

@@ -115,8 +115,17 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 	if folder == "" && len(roots) == 1 {
 		folder = roots[0].Path // one media root: start inside it
 	}
-	if _, ok := index[folder]; !ok {
-		folder = "" // unknown or removed folder: back to the top
+	// An unknown or removed folder (its videos were deleted): go up to the nearest
+	// folder that still has videos, or the top.
+	for _, ok := index[folder]; !ok && folder != ""; _, ok = index[folder] {
+		if i := strings.LastIndex(folder, "/"); i >= 0 {
+			folder = folder[:i]
+		} else {
+			folder = ""
+		}
+	}
+	if folder == "" && len(roots) == 1 {
+		folder = roots[0].Path
 	}
 
 	progress := s.progressSnapshot()
@@ -234,7 +243,7 @@ func (s *Server) adminBrowse(r *http.Request) map[string]any {
 	return map[string]any{
 		"Cards": cards, "Total": total, "First": offset == 0,
 		"Folder": folder, "Crumbs": crumbs, "Subfolders": subfolders,
-		"Searching": searching, "LibraryEmpty": len(items) == 0,
+		"Searching": searching, "LibraryEmpty": len(items) == 0, "CanDelete": s.cfg.AllowDelete,
 		"Watch": countWatch(scope, progress),
 		"Next":  next, "More": next < total, "Remaining": total - next,
 	}
@@ -255,6 +264,12 @@ func (s *Server) adminJobs() map[string]any {
 	}
 	data["links"] = links
 	return data
+}
+
+// adminDeletePreview renders the confirmation for the library's multi-select.
+func (s *Server) adminDeletePreview(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	s.render(w, "delete-preview", s.previewDelete(r.Form["item"], r.Form["folder"]))
 }
 
 func displayDims(v *VideoStream) (int, int) {
