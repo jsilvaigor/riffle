@@ -192,6 +192,14 @@ func (s *Server) adminItemAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.toast(w, true, "Marked %s as %s.", name, r.PathValue("action"))
+	case "delete":
+		if _, err := s.deleteItem(id); err != nil {
+			s.toast(w, false, "Couldn't delete %s: %v", name, err)
+			return
+		}
+		// item-deleted first: the library page closes the item view before refreshing.
+		w.Header().Set("HX-Trigger", `{"item-deleted":"`+id+`","refresh":""}`)
+		s.render(w, "toast", map[string]any{"OK": true, "Msg": "Deleted " + name + "."})
 	default:
 		http.NotFound(w, r)
 	}

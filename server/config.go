@@ -26,6 +26,9 @@ type Config struct {
 	Workers   int           // concurrent trickplay jobs
 	Accurate  bool          // decode every frame for exact thumbnails (slower)
 	ScanEvery time.Duration // periodic rescan interval (0 disables)
+	// AllowDelete lets the dashboard and API delete video files. Needs the media
+	// folders mounted read-write.
+	AllowDelete bool
 }
 
 func env(key, def string) string {
@@ -83,16 +86,17 @@ func loadConfig() (Config, error) {
 	}
 	scanMin := envInt("RIFFLE_SCAN_MINUTES", 30)
 	c := Config{
-		Addr:      env("RIFFLE_ADDR", ":8770"),
-		Roots:     roots,
-		DataDir:   env("RIFFLE_DATA", "/data"),
-		Token:     env("RIFFLE_TOKEN", ""),
-		HWAccel:   strings.ToLower(env("RIFFLE_HWACCEL", "cuda")),
-		Interval:  envFloat("RIFFLE_TRICKPLAY_INTERVAL", 5),
-		TileWidth: envInt("RIFFLE_TRICKPLAY_WIDTH", 320),
-		Workers:   envInt("RIFFLE_TRICKPLAY_WORKERS", 1),
-		Accurate:  env("RIFFLE_TRICKPLAY_ACCURATE", "false") == "true",
-		ScanEvery: time.Duration(scanMin) * time.Minute,
+		Addr:        env("RIFFLE_ADDR", ":8770"),
+		Roots:       roots,
+		DataDir:     env("RIFFLE_DATA", "/data"),
+		Token:       env("RIFFLE_TOKEN", ""),
+		HWAccel:     strings.ToLower(env("RIFFLE_HWACCEL", "cuda")),
+		Interval:    envFloat("RIFFLE_TRICKPLAY_INTERVAL", 5),
+		TileWidth:   envInt("RIFFLE_TRICKPLAY_WIDTH", 320),
+		Workers:     envInt("RIFFLE_TRICKPLAY_WORKERS", 1),
+		Accurate:    env("RIFFLE_TRICKPLAY_ACCURATE", "false") == "true",
+		ScanEvery:   time.Duration(scanMin) * time.Minute,
+		AllowDelete: env("RIFFLE_ALLOW_DELETE", "false") == "true",
 	}
 	if c.Workers < 1 {
 		c.Workers = 1

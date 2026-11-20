@@ -208,6 +208,10 @@ func (t *Trickplay) worker(ctx context.Context) {
 		if err != nil && ctx.Err() != nil {
 			return
 		}
+		if t.lib.Get(id) == nil { // deleted while it was queued or running
+			os.RemoveAll(t.Dir(id))
+			continue
+		}
 		job := TrickJob{ID: id, HWAccel: hw, Fallback: hw != t.cfg.HWAccel,
 			Millis: time.Since(start).Milliseconds(), At: time.Now().UTC()}
 		if err != nil && refresh {

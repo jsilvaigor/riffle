@@ -67,5 +67,7 @@ the top priority. Two parts:
 - [x] Server: web player in the admin dashboard (`/admin/watch/{id}`): direct play of the
   original file, trickplay scrub previews, shared resume positions and watch state. No
   transcoding, so it only plays what the browser decodes
+- [x] Server: delete videos from the dashboard and `DELETE /api/items/{id}`, opt-in with
+  `RIFFLE_ALLOW_DELETE` (media mounted read-write)
 - [x] iOS app: running on a device; Picture in Picture and AirPlay
   remote mode dropped

@@ -27,6 +27,7 @@ All settings are environment variables.
 | `RIFFLE_TRICKPLAY_WORKERS` | `1` | Concurrent thumbnail jobs. Keep at 1 for HDD arrays |
 | `RIFFLE_TRICKPLAY_ACCURATE` | `false` | `true` decodes every frame for exact thumbnails (much slower) |
 | `RIFFLE_SCAN_MINUTES` | `30` | Periodic rescan; `0` disables |
+| `RIFFLE_ALLOW_DELETE` | `false` | `true` lets the dashboard and API delete video files. Mount media **read-write** for it (see [Deleting videos](#deleting-videos)) |
 
 By default thumbnails come from **keyframes only** (`-skip_frame nokey`). That's 10-50x
 faster than a full decode; each thumbnail snaps to the nearest keyframe, usually under
@@ -123,13 +124,14 @@ All endpoints except `/api/health` require the token, sent as `Authorization: Be
 
 | Method & path | Description |
 |---|---|
-| `GET /api/health` | Server name, version, commit, whether auth is required |
+| `GET /api/health` | Server name, version, commit, whether auth is required, whether deleting is on (`canDelete`) |
 | `GET /admin/watch/{id}` | Web player for one video (see [Web player](#web-player)) |
 | `GET /admin/` | Admin dashboard (see below); its fragments and actions under `/admin/f/` and `/admin/a/` need the token |
 | `GET /api/diagnostics` | Build, ffmpeg/GPU environment and live decode tests (takes 1-3 s) |
 | `GET /api/library` | `{roots: [...], items: [...]}` with metadata and trickplay state. Gzipped when accepted; weak `ETag`, so a refresh with `If-None-Match` gets a 304 |
 | `POST /api/library/rescan` | Trigger a rescan (202) |
 | `GET /api/items/{id}` | One item |
+| `DELETE /api/items/{id}` | Delete the video file and forget it (204). 403 unless `RIFFLE_ALLOW_DELETE=true`; 409 with the reason when the file can't be removed (read-only mount, permissions) |
 | `GET`/`HEAD /api/items/{id}/stream` | Original file, Range-enabled |
 | `POST /api/items/{id}/warm` | Spin up the disk ahead of playback (202) |
 | `GET /api/items/{id}/poster.jpg` | Still for the library screen: the trickplay tile 10% into the video (tile size, 320 px wide by default). 202 + `Retry-After` until trickplay is ready (doesn't jump the queue); 404 if unavailable |
@@ -240,9 +242,21 @@ subfolders, and say where each result is; sort by name, recently changed, size o
 duration. The folder is in the URL (`#folder=…`), so back and forward walk the folders.
 Clicking a video opens its details: a hover-scrub preview built from the trickplay sheets (the same
 frames the app shows while scrubbing), the sheets themselves, metadata (codec, stored and
-displayed size, rotation, audio and subtitle tracks), the resume position, **Play**, and
-**Rebuild thumbnails** / **Re-probe**. Details are linkable as `/admin/library#folder=…&item=<id>`. Images
+displayed size, rotation, audio and subtitle tracks), the resume position, **Play**,
+**Rebuild thumbnails** / **Re-probe**, and **Delete video** when deleting is on. Details are linkable as `/admin/library#folder=…&item=<id>`. Images
 load through the API with the token as `?token=`, since `<img>` can't send headers.
+
+### Deleting videos
+
+Off by default. To turn it on, set `RIFFLE_ALLOW_DELETE=true` **and** mount the media
+folders read-write (drop `:ro`, or set the paths' Access Mode to *Read/Write* in the Unraid
+template). Then **Delete video** shows in a video's details on the library page; it asks for
+confirmation, removes the file from the share, and drops the video's index entry,
+thumbnails and resume position. Apps can do the same with `DELETE /api/items/{id}` and check
+`canDelete` in `/api/health` before offering it.
+
+There's no trash: the file is gone. With deleting on but the folder still read-only, the
+dashboard says so instead of deleting. Empty folders are left in place.
 
 ### Web player
 
